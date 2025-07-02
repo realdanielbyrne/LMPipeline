@@ -1,0 +1,64 @@
+# Configuration for fine-tuning Llama 7B model
+# Usage: python -m fnsft.sft_trainer --config configs/llama_7b_config.yaml
+
+# Model configuration
+model_name_or_path: "meta-llama/Llama-2-7b-hf"
+use_auth_token: false
+trust_remote_code: false
+torch_dtype: "float16"
+
+# Data configuration
+dataset_name_or_path: "tatsu-lab/alpaca"
+dataset_config_name: null
+max_seq_length: 2048
+instruction_template: "### Instruction:\n{instruction}\n\n### Response:\n{response}"
+validation_split: 0.1
+
+# Quantization configuration
+use_4bit: true
+use_8bit: false
+bnb_4bit_compute_dtype: "float16"
+bnb_4bit_quant_type: "nf4"
+bnb_4bit_use_double_quant: true
+
+# LoRA configuration
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.1
+lora_target_modules: null  # Auto-detect
+lora_bias: "none"
+
+# Training configuration
+output_dir: "./outputs/llama_7b_sft"
+num_train_epochs: 3
+per_device_train_batch_size: 1
+per_device_eval_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 1e-4
+weight_decay: 0.001
+warmup_ratio: 0.03
+lr_scheduler_type: "cosine"
+
+# Logging and evaluation
+logging_steps: 10
+save_steps: 500
+eval_steps: 500
+save_total_limit: 3
+load_best_model_at_end: true
+metric_for_best_model: "eval_loss"
+greater_is_better: false
+
+# Additional options
+resume_from_checkpoint: null
+use_wandb: true
+wandb_project: "llama-sft"
+convert_to_gguf: true
+gguf_quantization: "q4_0"
+
+# Hugging Face Hub upload options
+push_to_hub: false
+hub_repo_id: null  # e.g., "username/llama-7b-alpaca-lora"
+hub_commit_message: null  # Optional custom commit message
+hub_private: false
+hub_token: null  # Use HF_TOKEN environment variable or login
+push_adapter_only: false  # Set to true to only upload LoRA adapters

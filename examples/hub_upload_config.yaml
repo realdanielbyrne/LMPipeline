@@ -1,0 +1,30 @@
+# Fine-tuning configuration with Hub upload
+model_name_or_path: "microsoft/DialoGPT-medium"
+dataset_name_or_path: "tatsu-lab/alpaca"
+output_dir: "./outputs/config_based_training"
+
+# Training settings
+num_train_epochs: 2
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4
+learning_rate: 2e-4
+max_seq_length: 1024
+validation_split: 0.1
+
+# LoRA settings
+use_4bit: true
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.05
+
+# Logging
+logging_steps: 20
+save_steps: 200
+eval_steps: 200
+
+# Hub upload settings
+push_to_hub: true
+hub_repo_id: "your-username/dialogpt-medium-alpaca"  # Change this!
+hub_commit_message: "Fine-tuned DialoGPT-medium on Alpaca dataset with LoRA"
+hub_private: false
+push_adapter_only: false

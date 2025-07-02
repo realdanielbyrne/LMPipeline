@@ -1,0 +1,45 @@
+[project]
+name = "fnsft"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Daniel Byrne",email = "realdanielbyrne@icloud.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "datasets>=2.14.0",
+    "accelerate>=0.24.0",
+    "peft>=0.6.0",
+    "huggingface_hub>=0.19.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "tqdm>=4.65.0",
+    "wandb>=0.15.0",
+    "tensorboard>=2.14.0",
+    "packaging>=23.0",
+    "psutil>=5.9.0",
+    "safetensors>=0.4.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+quantization = [
+    "bitsandbytes>=0.46.0; platform_machine != 'arm64'",
+]
+
+[project.scripts]
+fnsft-train = "fnsft.sft_trainer:main"
+
+[tool.poetry]
+packages = [{include = "fnsft", from = "src"}]
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
