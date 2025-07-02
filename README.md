@@ -1,6 +1,6 @@
-# FNSFT - Fine-tuning for Neural Supervised Fine-Tuning
+# FNSFT -- Functional Network Supervised Fine-Tuning
 
-A production-ready Python framework for supervised fine-tuning of quantized language models using modern parameter-efficient techniques.
+A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques.
 
 ## 🚀 Features
 
@@ -102,22 +102,95 @@ fnsft/
 
 ## 📊 Data Format
 
-### Instruction-Response Format (Recommended)
+FNSFT now supports **automatic dataset format detection and conversion**! You can use datasets in various formats without manual preprocessing.
+
+### Supported Formats
+
+#### 1. Alpaca Format (Instruction + Input + Output)
 
 ```json
 {
     "instruction": "What is the capital of France?",
-    "response": "The capital of France is Paris."
+    "input": "",
+    "output": "The capital of France is Paris."
 }
 ```
 
-### Text Format
+#### 2. Prompt-Completion Format
+
+```json
+{
+    "prompt": "What is the capital of France?",
+    "completion": "The capital of France is Paris."
+}
+```
+
+#### 3. Question-Answer Format
+
+```json
+{
+    "question": "What is the capital of France?",
+    "answer": "The capital of France is Paris."
+}
+```
+
+#### 4. Conversational Format
+
+```json
+{
+    "messages": [
+        {"role": "user", "content": "What is the capital of France?"},
+        {"role": "assistant", "content": "The capital of France is Paris."}
+    ]
+}
+```
+
+#### 5. Text Format (Pre-formatted)
 
 ```json
 {
     "text": "### Instruction:\nWhat is the capital of France?\n\n### Response:\nThe capital of France is Paris."
 }
 ```
+
+#### 6. Context-Question-Answer Format
+
+```json
+{
+    "context": "Paris is the capital and largest city of France.",
+    "question": "What is the capital of France?",
+    "answer": "Paris"
+}
+```
+
+### Automatic Format Detection
+
+The system automatically detects your dataset format and converts it to a standardized format:
+
+```bash
+# Auto-detection is enabled by default
+python -m fnsft.sft_trainer \
+    --dataset_name_or_path your_dataset.jsonl \
+    --model_name_or_path your_model
+
+# Disable auto-detection if needed
+python -m fnsft.sft_trainer \
+    --dataset_name_or_path your_dataset.jsonl \
+    --model_name_or_path your_model \
+    --no_auto_detect_format
+```
+
+### JSONL Format
+
+Your dataset should be in JSONL format (one JSON object per line):
+
+```jsonl
+{"instruction": "What is machine learning?", "response": "Machine learning is a subset of AI..."}
+{"prompt": "Explain neural networks", "completion": "Neural networks are computing systems..."}
+{"question": "What is deep learning?", "answer": "Deep learning uses neural networks with multiple layers..."}
+```
+
+**Note**: You can mix different formats in the same file - the system will detect the most common format and convert all entries accordingly.
 
 ## 💾 Memory Requirements
 

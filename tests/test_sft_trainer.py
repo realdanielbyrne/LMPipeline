@@ -8,7 +8,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 
 import torch
 from transformers import AutoTokenizer
@@ -20,6 +20,7 @@ from fnsft.sft_trainer import (
     QuantizationArguments,
     LoRAArguments,
     InstructionDataset,
+    DatasetFormatter,
     load_quantization_config,
     load_dataset_from_path,
     split_dataset,
@@ -178,6 +179,304 @@ class TestDatasetLoading(unittest.TestCase):
         train_data, val_data = split_dataset(data, validation_split=0.0)
         self.assertEqual(len(train_data), 100)
         self.assertEqual(len(val_data), 0)
+
+
+class TestDatasetFormatter(unittest.TestCase):
+    """Test the DatasetFormatter class for automatic format detection and conversion."""
+
+    def test_detect_alpaca_format(self):
+        """Test detection of Alpaca format (instruction + input + output)."""
+        data = [
+            {"instruction": "What is AI?", "input": "", "output": "AI is artificial intelligence."},
+            {"instruction": "Explain ML", "input": "in simple terms", "output": "ML is machine learning."}
+        ]
+
+        detected_format = DatasetFormatter.detect_format(data)
+        self.assertEqual(detected_format, ("instruction", "input", "output"))
+
+    def test_detect_prompt_completion_format(self):
+        """Test detection of prompt-completion format."""
+        data = [
+            {"prompt": "What is AI?", "completion": "AI is artificial intelligence."},
+            {"prompt": "Explain ML", "completion": "ML is machine learning."}
+        ]
+
+        detected_format = DatasetFormatter.detect_format(data)
+        self.assertEqual(detected_format, ("prompt", "completion"))
+
+    def test_detect_qa_format(self):
+        """Test detection of question-answer format."""
+        data = [
+            {"question": "What is AI?", "answer": "AI is artificial intelligence."},
+            {"question": "Explain ML", "answer": "ML is machine learning."}
+        ]
+
+        detected_format = DatasetFormatter.detect_format(data)
+        self.assertEqual(detected_format, ("question", "answer"))
+
+    def test_detect_conversational_format(self):
+        """Test detection of conversational format."""
+        data = [
+            {"messages": [{"role": "user", "content": "What is AI?"}, {"role": "assistant", "content": "AI is artificial intelligence."}]},
+            {"messages": [{"role": "user", "content": "Explain ML"}, {"role": "assistant", "content": "ML is machine learning."}]}
+        ]
+
+        detected_format = DatasetFormatter.detect_format(data)
+        self.assertEqual(detected_format, ("messages",))
+
+    def test_detect_text_format(self):
+        """Test detection of text format."""
+        data = [
+            {"text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI is artificial intelligence."},
+            {"text": "### Instruction:\nExplain ML\n\n### Response:\nML is machine learning."}
+        ]
+
+        detected_format = DatasetFormatter.detect_format(data)
+        self.assertEqual(detected_format, ("text",))
+
+    def test_convert_alpaca_format(self):
+        """Test conversion of Alpaca format."""
+        item = {"instruction": "What is AI?", "input": "explain briefly", "output": "AI is artificial intelligence."}
+        format_keys = ("instruction", "input", "output")
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        self.assertIn("instruction", converted)
+        self.assertIn("response", converted)
+        self.assertIn("explain briefly", converted["instruction"])
+        self.assertEqual(converted["response"], "AI is artificial intelligence.")
+
+    def test_convert_alpaca_format_empty_input(self):
+        """Test conversion of Alpaca format with empty input."""
+        item = {"instruction": "What is AI?", "input": "", "output": "AI is artificial intelligence."}
+        format_keys = ("instruction", "input", "output")
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        self.assertEqual(converted["instruction"], "What is AI?")
+        self.assertEqual(converted["response"], "AI is artificial intelligence.")
+
+    def test_convert_prompt_completion_format(self):
+        """Test conversion of prompt-completion format."""
+        item = {"prompt": "What is AI?", "completion": "AI is artificial intelligence."}
+        format_keys = ("prompt", "completion")
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        self.assertEqual(converted["instruction"], "What is AI?")
+        self.assertEqual(converted["response"], "AI is artificial intelligence.")
+
+    def test_convert_qa_format(self):
+        """Test conversion of question-answer format."""
+        item = {"question": "What is AI?", "answer": "AI is artificial intelligence."}
+        format_keys = ("question", "answer")
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        self.assertEqual(converted["instruction"], "What is AI?")
+        self.assertEqual(converted["response"], "AI is artificial intelligence.")
+
+    def test_convert_conversational_format(self):
+        """Test conversion of conversational format."""
+        item = {"messages": [
+            {"role": "user", "content": "What is AI?"},
+            {"role": "assistant", "content": "AI is artificial intelligence."}
+        ]}
+        format_keys = ("messages",)
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        self.assertEqual(converted["instruction"], "What is AI?")
+        self.assertEqual(converted["response"], "AI is artificial intelligence.")
+
+    def test_convert_conversational_format_multi_turn(self):
+        """Test conversion of multi-turn conversational format."""
+        item = {"messages": [
+            {"role": "user", "content": "What is AI?"},
+            {"role": "assistant", "content": "AI is artificial intelligence."},
+            {"role": "user", "content": "Tell me more"},
+            {"role": "assistant", "content": "AI involves machine learning and neural networks."}
+        ]}
+        format_keys = ("messages",)
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        self.assertIn("What is AI?", converted["instruction"])
+        self.assertIn("Tell me more", converted["instruction"])
+        self.assertIn("AI is artificial intelligence.", converted["response"])
+        self.assertIn("AI involves machine learning", converted["response"])
+
+    def test_convert_text_format(self):
+        """Test conversion of text format (should pass through unchanged)."""
+        item = {"text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI is artificial intelligence."}
+        format_keys = ("text",)
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        self.assertEqual(converted["text"], item["text"])
+
+    def test_detect_format_empty_dataset(self):
+        """Test format detection with empty dataset."""
+        with self.assertRaises(ValueError):
+            DatasetFormatter.detect_format([])
+
+    def test_detect_format_invalid_item(self):
+        """Test format detection with invalid item."""
+        with self.assertRaises(ValueError):
+            DatasetFormatter.detect_format(["not a dict"])
+
+    def test_infer_and_convert_unknown_format(self):
+        """Test inference and conversion of unknown format."""
+        item = {"query": "What is AI?", "result": "AI is artificial intelligence."}
+        format_keys = ("query", "result")
+
+        converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
+
+        # Should infer query as instruction and result as response
+        self.assertEqual(converted["instruction"], "What is AI?")
+        self.assertEqual(converted["response"], "AI is artificial intelligence.")
+
+
+class TestEnhancedInstructionDataset(unittest.TestCase):
+    """Test the enhanced InstructionDataset class with auto-detection."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        # Create a mock tokenizer
+        self.tokenizer = Mock()
+        self.tokenizer.pad_token = None
+        self.tokenizer.eos_token = "<|endoftext|>"
+        self.tokenizer.eos_token_id = 50256
+
+        # Mock tokenizer call
+        mock_encoding = {
+            "input_ids": torch.tensor([[1, 2, 3, 4, 5]]),
+            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]])
+        }
+        self.tokenizer.return_value = mock_encoding
+
+    def test_auto_detect_alpaca_format(self):
+        """Test auto-detection with Alpaca format."""
+        data = [
+            {"instruction": "What is AI?", "input": "", "output": "AI is artificial intelligence."},
+            {"instruction": "Explain ML", "input": "briefly", "output": "ML is machine learning."}
+        ]
+
+        dataset = InstructionDataset(
+            data=data,
+            tokenizer=self.tokenizer,
+            max_length=512,
+            auto_detect_format=True
+        )
+
+        self.assertEqual(dataset.detected_format, ("instruction", "input", "output"))
+        self.assertEqual(len(dataset), 2)
+
+    def test_auto_detect_prompt_completion_format(self):
+        """Test auto-detection with prompt-completion format."""
+        data = [
+            {"prompt": "What is AI?", "completion": "AI is artificial intelligence."},
+            {"prompt": "Explain ML", "completion": "ML is machine learning."}
+        ]
+
+        dataset = InstructionDataset(
+            data=data,
+            tokenizer=self.tokenizer,
+            max_length=512,
+            auto_detect_format=True
+        )
+
+        self.assertEqual(dataset.detected_format, ("prompt", "completion"))
+        self.assertEqual(len(dataset), 2)
+
+    def test_auto_detect_disabled(self):
+        """Test with auto-detection disabled."""
+        data = [
+            {"instruction": "What is AI?", "response": "AI is artificial intelligence."},
+            {"instruction": "Explain ML", "response": "ML is machine learning."}
+        ]
+
+        dataset = InstructionDataset(
+            data=data,
+            tokenizer=self.tokenizer,
+            max_length=512,
+            auto_detect_format=False
+        )
+
+        self.assertIsNone(dataset.detected_format)
+        self.assertEqual(len(dataset), 2)
+
+    def test_getitem_with_auto_detection(self):
+        """Test __getitem__ with auto-detection enabled."""
+        data = [
+            {"prompt": "What is AI?", "completion": "AI is artificial intelligence."}
+        ]
+
+        dataset = InstructionDataset(
+            data=data,
+            tokenizer=self.tokenizer,
+            max_length=512,
+            auto_detect_format=True
+        )
+
+        item = dataset[0]
+
+        self.assertIn("input_ids", item)
+        self.assertIn("attention_mask", item)
+        self.assertIn("labels", item)
+        self.assertTrue(torch.equal(item["input_ids"], item["labels"]))
+
+    def test_getitem_conversion_error_fallback(self):
+        """Test fallback when conversion fails."""
+        data = [
+            {"instruction": "What is AI?", "response": "AI is artificial intelligence."}
+        ]
+
+        # Create dataset with auto-detection but force a conversion error
+        dataset = InstructionDataset(
+            data=data,
+            tokenizer=self.tokenizer,
+            max_length=512,
+            auto_detect_format=True
+        )
+
+        # Manually set a bad format to trigger fallback
+        dataset.detected_format = ("bad", "format")
+
+        # Should still work due to fallback logic
+        item = dataset[0]
+        self.assertIn("input_ids", item)
+
+    def test_empty_dataset_with_auto_detection(self):
+        """Test auto-detection with empty dataset."""
+        data = []
+
+        dataset = InstructionDataset(
+            data=data,
+            tokenizer=self.tokenizer,
+            max_length=512,
+            auto_detect_format=True
+        )
+
+        self.assertIsNone(dataset.detected_format)
+        self.assertEqual(len(dataset), 0)
+
+    def test_unsupported_format_fallback(self):
+        """Test fallback handling for completely unsupported format."""
+        data = [
+            {"unknown_field": "some value"}
+        ]
+
+        dataset = InstructionDataset(
+            data=data,
+            tokenizer=self.tokenizer,
+            max_length=512,
+            auto_detect_format=True
+        )
+
+        # Should work due to fallback logic (converts to text format)
+        item = dataset[0]
+        self.assertIn("input_ids", item)
 
 
 class TestConfigLoading(unittest.TestCase):
