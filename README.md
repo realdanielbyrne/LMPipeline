@@ -55,7 +55,7 @@ pip install -e .
 ### Alternative: Using Poetry
 
 ```bash
-# If you prefer Poetry for dependency management
+# If you prefer Poetry for dependency management, version 2.1 minimum requirement
 poetry install
 poetry shell
 ```
