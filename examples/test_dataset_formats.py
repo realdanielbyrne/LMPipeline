@@ -14,7 +14,7 @@ from pathlib import Path
 # Add the src directory to the path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fnsft.sft_trainer import DatasetFormatter, InstructionDataset
+from lmpipeline.sft_trainer import DatasetFormatter, InstructionDataset
 from transformers import AutoTokenizer
 
 

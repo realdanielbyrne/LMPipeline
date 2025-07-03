@@ -14,7 +14,7 @@ import torch
 from transformers import AutoTokenizer
 
 # Import the modules to test
-from fnsft.sft_trainer import (
+from lmpipeline.sft_trainer import (
     ModelArguments,
     DataArguments,
     QuantizationArguments,
@@ -23,8 +23,8 @@ from fnsft.sft_trainer import (
     load_config_from_yaml,
     upload_to_hub,
 )
-from fnsft.utils.dataset_utils import DatasetFormatter
-from fnsft.utils.model_utils import (
+from lmpipeline.utils.dataset_utils import DatasetFormatter
+from lmpipeline.utils.model_utils import (
     load_quantization_config,
     load_dataset_from_path,
     split_dataset,
@@ -667,7 +667,7 @@ class TestHubUpload(unittest.TestCase):
         mock_hf_api.return_value = mock_api
 
         # Mock repository not found, then successful creation
-        from fnsft.sft_trainer import RepositoryNotFoundError
+        from lmpipeline.sft_trainer import RepositoryNotFoundError
 
         mock_api.repo_info.side_effect = RepositoryNotFoundError("Not found")
         mock_api.create_repo = MagicMock()

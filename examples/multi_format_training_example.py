@@ -78,7 +78,7 @@ def demonstrate_format_detection():
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
     
-    from fnsft.sft_trainer import DatasetFormatter
+    from lmpipeline.sft_trainer import DatasetFormatter
     
     print("=== Automatic Dataset Format Detection Demo ===\n")
     

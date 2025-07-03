@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from fnsft.sft_trainer import upload_to_hub
+from lmpipeline.sft_trainer import upload_to_hub
 from transformers import AutoTokenizer
 
 # Load the tokenizer

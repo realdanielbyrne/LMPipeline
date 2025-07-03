@@ -9,8 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from src.fnsft.pipeline import Pipeline, PipelineConfig
-from src.fnsft.algorithms.base import BaseStage, StageConfig, StageResult
+from src.lmpipeline.pipeline import Pipeline, PipelineConfig
+from src.lmpipeline.algorithms.base import BaseStage, StageConfig, StageResult
 
 
 class MockStage(BaseStage):

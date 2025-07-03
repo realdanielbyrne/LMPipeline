@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import torch
 from transformers import AutoTokenizer
 
-from src.fnsft.algorithms.dpo import (
+from src.lmpipeline.algorithms.dpo import (
     DPOConfig,
     DPODataset,
     DPOStage,
@@ -412,7 +412,7 @@ class TestDPOPipelineIntegration(unittest.TestCase):
 
     def test_dpo_stage_with_previous_result(self):
         """Test DPO stage with previous stage result."""
-        from src.fnsft.algorithms.base import StageResult
+        from src.lmpipeline.algorithms.base import StageResult
 
         # Create temporary directories for the mock paths
         sft_model_dir = Path(self.temp_dir) / "sft_model"
