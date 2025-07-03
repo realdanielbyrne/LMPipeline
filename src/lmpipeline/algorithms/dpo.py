@@ -7,13 +7,14 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple, cast
 
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 from torch.utils.data import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerBase
-from transformers.training_args import TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+
 
 from .base import BaseStage, StageConfig, StageResult
 
@@ -392,52 +393,68 @@ class DPOStage(BaseStage):
         model: AutoModelForCausalLM,
         tokenizer: AutoTokenizer,
         previous_result: Optional[StageResult] = None,
-    ) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
+    ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
         """
         Prepare model and tokenizer for DPO training.
 
         Args:
             model: Input model from previous stage
             tokenizer: Input tokenizer
-            previous_result: Result from previous stage
+            previous_result: Result from previous stage (unused but kept for interface compatibility)
 
         Returns:
             Tuple of (prepared_model, prepared_tokenizer)
         """
+        # previous_result is unused but kept for interface compatibility
+        _ = previous_result
         self.logger.info("Preparing model and tokenizer for DPO training")
 
         # Ensure model is in training mode
-        model.train()
+        if hasattr(model, "train"):
+            model.train()  # type: ignore
 
         # Set pad token if not exists
         if getattr(tokenizer, "pad_token", None) is None:
             eos_token = getattr(tokenizer, "eos_token", None)
             if eos_token is not None:
-                tokenizer.pad_token = eos_token
-                self.logger.info(f"Set pad_token to eos_token: {eos_token}")
+                if hasattr(tokenizer, "pad_token"):
+                    tokenizer.pad_token = eos_token  # type: ignore
+                    self.logger.info(f"Set pad_token to eos_token: {eos_token}")
             else:
                 # Add a pad token if no eos token exists
-                tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-                model.resize_token_embeddings(len(tokenizer))
-                self.logger.info("Added new pad token [PAD]")
+                if hasattr(tokenizer, "add_special_tokens"):
+                    tokenizer.add_special_tokens({"pad_token": "[PAD]"})  # type: ignore
+                    if hasattr(model, "resize_token_embeddings") and hasattr(
+                        tokenizer, "vocab_size"
+                    ):
+                        model.resize_token_embeddings(tokenizer.vocab_size)  # type: ignore
+                        self.logger.info("Added new pad token [PAD]")
 
         # Enable gradient checkpointing for memory efficiency
         if hasattr(model, "gradient_checkpointing_enable"):
-            model.gradient_checkpointing_enable()
+            model.gradient_checkpointing_enable()  # type: ignore
             self.logger.info("Enabled gradient checkpointing")
 
         # For DPO, we typically want to keep the model in full precision
         # or use the same precision as the input model
-        if hasattr(model, "config") and hasattr(model.config, "torch_dtype"):
-            self.logger.info(f"Model dtype: {model.config.torch_dtype}")
+        if hasattr(model, "config") and hasattr(model.config, "torch_dtype"):  # type: ignore
+            try:
+                self.logger.info(f"Model dtype: {model.config.torch_dtype}")  # type: ignore
+            except (AttributeError, TypeError):
+                # Handle cases where model.config.torch_dtype is not accessible or formattable
+                self.logger.info("Model dtype information not available")
 
         # Log model info
         if hasattr(model, "num_parameters"):
-            total_params = model.num_parameters()
-            trainable_params = model.num_parameters(only_trainable=True)
-            self.logger.info(
-                f"Model parameters: {total_params:,} total, {trainable_params:,} trainable"
-            )
+            try:
+                total_params = model.num_parameters()  # type: ignore
+                trainable_params = model.num_parameters(only_trainable=True)  # type: ignore
+                self.logger.info(
+                    f"Model parameters: {total_params:,} total, {trainable_params:,} trainable"
+                )
+            except (AttributeError, TypeError):
+                # Handle cases where num_parameters is not accessible or returns non-formattable values
+                self.logger.info("Model parameter information not available")
 
         return model, tokenizer
 
@@ -635,9 +652,16 @@ class DPOStage(BaseStage):
                                     f"Dataset {dataset_path} has no splits"
                                 )
                             # Get the first available split
-                            split_name = list(dataset.keys())[0]
-                            data = [item for item in dataset[split_name]]
-                            self.logger.info(f"Using split '{split_name}' from dataset")
+                            if isinstance(dataset, DatasetDict):
+                                split_name = list(dataset.keys())[0]
+                                data = [item for item in dataset[split_name]]
+                                self.logger.info(
+                                    f"Using split '{split_name}' from dataset"
+                                )
+                            else:
+                                # Single dataset, not a DatasetDict
+                                data = [item for item in dataset]
+                                self.logger.info("Using single dataset split")
                         except Exception as final_e:
                             raise ValueError(
                                 f"Failed to load preference dataset from {dataset_path}. "
@@ -654,6 +678,9 @@ class DPOStage(BaseStage):
             # Ensure type
             if not isinstance(data, list):
                 raise ValueError("Loaded preference data is not a list")
+
+            # Ensure data is properly typed
+            data = cast(List[Dict[str, Any]], data)
 
             # Validate format if auto-detection is enabled
             if self.config.auto_detect_format:
@@ -704,12 +731,14 @@ class DPOStage(BaseStage):
         return train_data, val_data
 
     def _create_preference_dataset(
-        self, data: List[Dict[str, Any]], tokenizer: PreTrainedTokenizerBase
+        self,
+        data: List[Dict[str, Any]],
+        tokenizer: Union[AutoTokenizer, PreTrainedTokenizerBase],
     ) -> DPODataset:
         """Create DPO dataset from preference data."""
         return DPODataset(
             data=data,
-            tokenizer=tokenizer,
+            tokenizer=cast(PreTrainedTokenizerBase, tokenizer),
             max_length=self.config.max_seq_length,
             auto_detect_format=self.config.auto_detect_format,
         )
@@ -755,19 +784,23 @@ class DPOStage(BaseStage):
             model=model,
             ref_model=ref_model,
             args=training_args,
-            beta=self.config.beta,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            tokenizer=tokenizer,
-            max_length=self.config.max_seq_length,
-            max_prompt_length=self.config.max_seq_length // 2,  # Use half for prompt
+            processing_class=tokenizer,
         )
 
         return trainer
 
-    def _create_training_arguments(self) -> TrainingArguments:
+    def _create_training_arguments(self):
         """Create training arguments for DPO trainer."""
-        return TrainingArguments(
+        try:
+            from trl import DPOConfig
+        except ImportError:
+            raise ImportError(
+                "TRL library is required for DPO training. Install it with: pip install trl"
+            )
+
+        return DPOConfig(
             output_dir=self.config.output_dir,
             num_train_epochs=self.config.num_train_epochs,
             per_device_train_batch_size=self.config.per_device_train_batch_size,
@@ -777,7 +810,7 @@ class DPOStage(BaseStage):
             logging_steps=10,
             save_steps=500,
             eval_steps=500 if self.config.validation_split > 0 else None,
-            evaluation_strategy="steps" if self.config.validation_split > 0 else "no",
+            eval_strategy="steps" if self.config.validation_split > 0 else "no",
             save_strategy="steps",
             save_total_limit=3,
             load_best_model_at_end=True if self.config.validation_split > 0 else False,
@@ -791,4 +824,7 @@ class DPOStage(BaseStage):
             dataloader_pin_memory=False,
             gradient_checkpointing=True,
             fp16=torch.cuda.is_available(),
+            beta=self.config.beta,
+            max_length=self.config.max_seq_length,
+            max_prompt_length=self.config.max_seq_length // 2,
         )
