@@ -27,7 +27,103 @@ A production-ready Python framework for supervised fine-tuning of functional net
 
 ## 📦 Installation
 
-### Quick Install
+### System Requirements
+
+- **Python**: 3.9 or higher
+- **Operating System**: Windows 10/11, macOS, or Linux
+- **Memory**: Minimum 8GB RAM (16GB+ recommended for larger models)
+- **Storage**: 10GB+ free space for models and datasets
+
+### Platform-Specific Installation
+
+#### 🪟 Windows with CUDA Support
+
+For optimal performance on Windows with NVIDIA GPUs:
+
+```bash
+git clone <repository-url>
+cd LMPipeline
+
+# Create and activate virtual environment
+python -m venv venv
+venv\Scripts\activate
+
+# Install PyTorch with CUDA support first
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Install LMPipeline with quantization support
+pip install -e .[quantization]
+
+# Verify CUDA installation
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+**CUDA Requirements:**
+
+- NVIDIA GPU with CUDA Compute Capability 5.0+
+- CUDA 11.8 or 12.1+ installed
+- Latest NVIDIA drivers
+
+**Note for RTX 40-series (RTX 4090, RTX 5090):** These GPUs may require PyTorch nightly builds for full compatibility:
+
+```bash
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124
+```
+
+#### 🍎 Apple Silicon (M1/M2/M3/M4)
+
+For Apple Silicon Macs with Metal Performance Shaders (MPS) acceleration:
+
+```bash
+git clone <repository-url>
+cd LMPipeline
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install PyTorch with MPS support
+pip install torch torchvision torchaudio
+
+# Install LMPipeline (quantization not supported on ARM64)
+pip install -e .
+
+# Verify MPS installation
+python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
+```
+
+**Apple Silicon Notes:**
+
+- BitsAndBytes quantization is not supported on ARM64
+- Use alternative quantization methods or run models in FP16
+- MPS acceleration provides significant speedup over CPU
+- Memory is shared between CPU and GPU
+
+#### 🐧 Linux with CUDA
+
+For Linux systems with NVIDIA GPUs:
+
+```bash
+git clone <repository-url>
+cd LMPipeline
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install PyTorch with CUDA support
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Install LMPipeline with all features
+pip install -e .[all]
+
+# Verify installation
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+#### 💻 CPU-Only Installation
+
+For systems without GPU acceleration:
 
 ```bash
 git clone <repository-url>
@@ -37,26 +133,21 @@ cd LMPipeline
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Development Install
-
-```bash
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode
+# Install CPU-only version
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 pip install -e .
 ```
 
 ### Alternative: Using Poetry
 
 ```bash
-# If you prefer Poetry for dependency management, version 2.1 minimum requirement
+# If you prefer Poetry for dependency management
 poetry install
+
+# For CUDA support, install PyTorch separately first
+poetry run pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Activate environment
 poetry shell
 ```
 
@@ -252,11 +343,69 @@ Your dataset should be in JSONL format (one JSON object per line):
 
 ## 💾 Memory Requirements
 
-| Model Size | 4-bit + LoRA | 8-bit + LoRA | Full Fine-tuning |
-|------------|--------------|--------------|------------------|
-| 7B         | 6-8 GB       | 10-12 GB     | 28+ GB           |
-| 13B        | 10-12 GB     | 18-20 GB     | 52+ GB           |
-| 30B        | 20-24 GB     | 36-40 GB     | 120+ GB          |
+### GPU Memory Requirements
+
+| Model Size | 4-bit + LoRA | 8-bit + LoRA | FP16 + LoRA | Full Fine-tuning |
+|------------|--------------|--------------|-------------|------------------|
+| 7B         | 6-8 GB       | 10-12 GB     | 14-16 GB    | 28+ GB           |
+| 13B        | 10-12 GB     | 18-20 GB     | 26-28 GB    | 52+ GB           |
+| 30B        | 20-24 GB     | 36-40 GB     | 60-64 GB    | 120+ GB          |
+
+### Platform-Specific Considerations
+
+#### 🪟 Windows CUDA
+
+- **RTX 3090/4090**: 24GB VRAM - Can handle 13B models with 4-bit quantization
+- **RTX 3080/4080**: 10-16GB VRAM - Suitable for 7B models with quantization
+- **RTX 3070/4070**: 8-12GB VRAM - Best for smaller models or CPU offloading
+- **RTX 5090**: 32GB VRAM - Can handle 30B+ models with quantization
+
+#### 🍎 Apple Silicon
+
+- **M1/M2 (8GB)**: 7B models with FP16, aggressive memory optimization required
+- **M1/M2 (16GB)**: 7B models comfortably, 13B with careful tuning
+- **M1/M2 Pro/Max (32GB)**: 13B models with FP16, some 30B models possible
+- **M3/M4 Max (64GB+)**: 30B models with FP16, excellent for large model training
+
+**Note**: Apple Silicon uses unified memory, so system RAM is shared with GPU.
+
+#### 🐧 Linux CUDA
+
+- Same as Windows CUDA requirements
+- Better memory management and optimization options
+- Support for multi-GPU setups with model parallelism
+
+### Memory Optimization Tips
+
+#### For Limited VRAM (< 12GB)
+
+```bash
+# Use 4-bit quantization with small LoRA rank
+--use_4bit --lora_r 8 --lora_alpha 16 --per_device_train_batch_size 1
+
+# Enable gradient checkpointing and CPU offloading
+--gradient_checkpointing --dataloader_pin_memory false
+```
+
+#### For Apple Silicon
+
+```bash
+# Use FP16 instead of quantization
+--fp16 --per_device_train_batch_size 2 --gradient_accumulation_steps 4
+
+# Optimize for unified memory
+--dataloader_num_workers 0 --max_seq_length 1024
+```
+
+#### For High VRAM (24GB+)
+
+```bash
+# Use larger batch sizes and LoRA ranks
+--per_device_train_batch_size 4 --lora_r 32 --lora_alpha 64
+
+# Enable mixed precision for speed
+--bf16 --tf32
+```
 
 ## 🤗 Hugging Face Hub Integration
 
@@ -330,6 +479,114 @@ Run the test suite:
 ```bash
 python -m pytest tests/
 ```
+
+### Platform-Specific Testing
+
+#### Windows CUDA Testing
+
+```bash
+# Test CUDA functionality
+poetry run python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count())"
+
+# Run tests with CUDA
+poetry run pytest tests/ -v
+```
+
+#### Apple Silicon Testing
+
+```bash
+# Test MPS functionality
+python -c "import torch; print('MPS available:', torch.backends.mps.is_available())"
+
+# Run tests (some quantization tests will be skipped on ARM64)
+python -m pytest tests/ -v
+```
+
+## 🔧 Troubleshooting
+
+### Windows CUDA Issues
+
+**Problem**: `CUDA available: False` despite having NVIDIA GPU
+
+- **Solution**: Reinstall PyTorch with CUDA support:
+
+  ```bash
+  pip uninstall torch torchvision torchaudio
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+  ```
+
+**Problem**: `RuntimeError: CUDA error: no kernel image is available for execution on the device`
+
+- **Cause**: GPU architecture not supported by current PyTorch build
+- **Solution**: For RTX 40/50-series, use nightly builds:
+
+  ```bash
+  pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu124
+  ```
+
+**Problem**: `ImportError: cannot import name 'bitsandbytes'`
+
+- **Solution**: Install quantization dependencies:
+
+  ```bash
+  pip install -e .[quantization]
+  ```
+
+### Apple Silicon Issues
+
+**Problem**: `MPS available: False` on M1/M2/M3 Mac
+
+- **Solution**: Update to latest PyTorch version:
+
+  ```bash
+  pip install --upgrade torch torchvision torchaudio
+  ```
+
+**Problem**: `bitsandbytes` installation fails on ARM64
+
+- **Expected**: BitsAndBytes doesn't support ARM64 architecture
+- **Solution**: Use FP16 training instead of quantization:
+
+  ```bash
+  # Add to your training command
+  --fp16 --no_use_4bit --no_use_8bit
+  ```
+
+**Problem**: Out of memory errors on Apple Silicon
+
+- **Cause**: Unified memory architecture
+- **Solution**: Reduce batch size and enable gradient checkpointing:
+
+  ```bash
+  --per_device_train_batch_size 1 --gradient_checkpointing
+  ```
+
+### General Issues
+
+**Problem**: `ModuleNotFoundError: No module named 'lmpipeline'`
+
+- **Solution**: Install in development mode:
+
+  ```bash
+  pip install -e .
+  ```
+
+**Problem**: YAML configuration file not found
+
+- **Solution**: Use absolute paths or run from project root:
+
+  ```bash
+  cd LMPipeline
+  lmpipeline-pipeline --config configs/your_config.yaml
+  ```
+
+**Problem**: Out of memory during training
+
+- **Solutions**:
+  - Reduce batch size: `--per_device_train_batch_size 1`
+  - Enable gradient checkpointing: `--gradient_checkpointing`
+  - Use quantization: `--use_4bit` (not available on Apple Silicon)
+  - Reduce sequence length: `--max_seq_length 1024`
 
 ## 📖 Documentation
 

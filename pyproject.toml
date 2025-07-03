@@ -31,6 +31,24 @@ quantization = [
     "bitsandbytes>=0.46.0; platform_machine != 'arm64'",
 ]
 
+# Platform-specific dependencies for optimal performance
+cuda = [
+    # Windows CUDA support - install PyTorch with CUDA
+    # Use: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    "bitsandbytes>=0.46.0; platform_machine != 'arm64'",
+]
+
+apple-silicon = [
+    # Apple Silicon (M1/M2/M3) optimized dependencies
+    # PyTorch with Metal Performance Shaders (MPS) support
+    # Note: bitsandbytes not supported on ARM64, use alternative quantization
+]
+
+# Complete installation with all optional features
+all = [
+    "bitsandbytes>=0.46.0; platform_machine != 'arm64'",
+]
+
 [project.scripts]
 lmpipeline-train = "lmpipeline.sft_trainer:main"
 lmpipeline-pipeline = "lmpipeline.pipeline_main:main"
