@@ -11,6 +11,7 @@ License: MIT
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -228,6 +229,28 @@ Examples:
         logger.info(f"  Stages: {' -> '.join(config.stages)}")
         logger.info(f"  Save final model: {config.save_final_model}")
         logger.info(f"  Cleanup intermediate: {config.cleanup_intermediate}")
+
+        # Show applied defaults information
+        from .utils.config_defaults import ConfigDefaults
+
+        if config.convert_to_gguf and config.gguf_output_path:
+            logger.info(f"  GGUF output path: {config.gguf_output_path}")
+
+        # Show environment variable overrides if any
+        env_vars = [
+            (ConfigDefaults.ENV_MODELS_DIR, ConfigDefaults.get_default_models_dir()),
+            (
+                ConfigDefaults.ENV_CHECKPOINTS_DIR,
+                ConfigDefaults.get_default_checkpoints_dir(),
+            ),
+            (ConfigDefaults.ENV_OUTPUT_DIR, ConfigDefaults.get_default_output_dir()),
+        ]
+
+        active_env_vars = [(var, val) for var, val in env_vars if var in os.environ]
+        if active_env_vars:
+            logger.info("  Environment variable overrides:")
+            for var, val in active_env_vars:
+                logger.info(f"    {var}: {val}")
 
         # Show post-processing plan
         if config.convert_to_gguf or config.push_to_hub:

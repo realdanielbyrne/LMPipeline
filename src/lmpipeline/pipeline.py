@@ -19,6 +19,7 @@ from .algorithms.rlaif import RLAIFStage
 from .algorithms.rl import RLStage
 from .algorithms.cot_distillation import CoTDistillationStage
 from .utils.post_processing import upload_to_hub, convert_to_gguf
+from .utils.config_defaults import ConfigDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +112,17 @@ class PipelineConfig:
 
     @classmethod
     def from_yaml(cls, config_path: str) -> "PipelineConfig":
-        """Load configuration from YAML file."""
+        """Load configuration from YAML file with intelligent defaults applied."""
         with open(config_path, "r") as f:
             config_dict = yaml.safe_load(f)
+
+        # Apply intelligent defaults
+        config_dict = ConfigDefaults.apply_all_defaults(config_dict)
+
+        # Validate that required directories can be created
+        failed_dirs = ConfigDefaults.validate_and_create_directories(config_dict)
+        if failed_dirs:
+            logger.warning(f"Could not create some directories: {failed_dirs}")
 
         return cls(**config_dict)
 
@@ -325,7 +334,11 @@ class Pipeline:
             and self.stage_results
             and self.stage_results[-1].success
         ):
-            final_model_path = os.path.join(self.config.output_dir, "final_model")
+            # Generate intelligent final model name
+            config_dict = self.config.__dict__.copy()
+            final_model_name = ConfigDefaults.generate_final_model_name(config_dict)
+            final_model_path = os.path.join(self.config.output_dir, final_model_name)
+
             self.logger.info(f"Saving final model to {final_model_path}")
 
             model.save_pretrained(final_model_path)  # type: ignore[attr-defined]
@@ -376,12 +389,24 @@ class Pipeline:
             try:
                 self.logger.info("Converting model to GGUF format")
 
-                # Determine output path
+                # Determine output path - use intelligent naming if not specified
                 if self.config.gguf_output_path:
                     gguf_output_path = self.config.gguf_output_path
                 else:
+                    # Generate intelligent GGUF filename
+                    config_dict = self.config.__dict__.copy()
+                    gguf_model_name = ConfigDefaults.generate_model_name(
+                        base_model_name=self.config.model_name_or_path,
+                        stages=self.config.stages,
+                        quantization_config=ConfigDefaults._extract_quantization_config(
+                            config_dict
+                        ),
+                        torch_dtype=self.config.torch_dtype,
+                        convert_to_gguf=True,
+                        gguf_quantization=self.config.gguf_quantization,
+                    )
                     gguf_output_path = os.path.join(
-                        self.config.output_dir, "model.gguf"
+                        self.config.output_dir, f"{gguf_model_name}.gguf"
                     )
 
                 convert_to_gguf(
