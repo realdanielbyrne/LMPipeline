@@ -1,5 +1,5 @@
 [project]
-name = "fnsft"
+name = "lmpipeline"
 version = "0.1.0"
 description = ""
 authors = [
@@ -36,7 +36,7 @@ fnsft-train = "fnsft.sft_trainer:main"
 fnsft-pipeline = "fnsft.pipeline_main:main"
 
 [tool.poetry]
-packages = [{include = "fnsft", from = "src"}]
+packages = [{include = "lmpipeline", from = "src"}]
 
 
 [tool.poetry.group.dev.dependencies]
