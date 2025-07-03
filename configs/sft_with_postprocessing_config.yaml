@@ -1,5 +1,5 @@
-# SFT-Only Pipeline Configuration
-# This configuration runs only the SFT stage for backward compatibility
+# SFT Pipeline with Post-Processing Configuration
+# This configuration demonstrates SFT training with Hub upload and GGUF conversion
 
 # Model configuration
 model_name_or_path: "microsoft/DialoGPT-medium"
@@ -8,7 +8,7 @@ trust_remote_code: false
 torch_dtype: "float16"
 
 # Pipeline configuration
-output_dir: "./outputs/sft_only"
+output_dir: "./outputs/sft_with_postprocessing"
 stages:
   - "sft"
 
@@ -17,19 +17,19 @@ save_final_model: true
 cleanup_intermediate: false
 log_level: "INFO"
 
-# Post-processing configuration
+# Post-processing configuration - ENABLED
 # Hugging Face Hub upload
-push_to_hub: false
-hub_repo_id: "your-username/your-sft-model"  # Required if push_to_hub is true
-hub_commit_message: "Upload SFT model from LMPipeline"
-hub_private: false
-hub_token: null  # Set via HF_TOKEN environment variable or provide here
-push_adapter_only: true  # For SFT, typically upload only LoRA adapters
+push_to_hub: true
+hub_repo_id: "your-username/my-fine-tuned-model"  # CHANGE THIS to your actual repo
+hub_commit_message: "Upload fine-tuned model with LoRA adapters"
+hub_private: false  # Set to true for private repositories
+hub_token: null  # Set via HF_TOKEN environment variable
+push_adapter_only: true  # Upload only LoRA adapters (recommended for SFT)
 
 # GGUF conversion for Ollama compatibility
-convert_to_gguf: false
-gguf_quantization: "q4_0"  # Options: q4_0, q4_1, q5_0, q5_1, q8_0, f16, f32
-gguf_output_path: null  # Defaults to output_dir/model.gguf
+convert_to_gguf: true
+gguf_quantization: "q4_0"  # Good balance of size and quality
+gguf_output_path: "./outputs/sft_with_postprocessing/model_q4_0.gguf"
 
 # Stage-specific configurations
 stage_configs:

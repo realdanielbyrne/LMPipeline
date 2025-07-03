@@ -21,6 +21,20 @@ save_final_model: true
 cleanup_intermediate: false
 log_level: "INFO"
 
+# Post-processing configuration
+# Hugging Face Hub upload
+push_to_hub: false
+hub_repo_id: "your-username/your-model-name"  # Required if push_to_hub is true
+hub_commit_message: "Upload fine-tuned model from LMPipeline"
+hub_private: false
+hub_token: null  # Set via HF_TOKEN environment variable or provide here
+push_adapter_only: false  # Set to true to only upload LoRA adapters
+
+# GGUF conversion for Ollama compatibility
+convert_to_gguf: false
+gguf_quantization: "q4_0"  # Options: q4_0, q4_1, q5_0, q5_1, q8_0, f16, f32
+gguf_output_path: null  # Defaults to output_dir/model.gguf
+
 # Stage-specific configurations
 stage_configs:
   sft:

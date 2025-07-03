@@ -18,6 +18,7 @@ from .algorithms.dpo import DPOStage
 from .algorithms.rlaif import RLAIFStage
 from .algorithms.rl import RLStage
 from .algorithms.cot_distillation import CoTDistillationStage
+from .utils.post_processing import upload_to_hub, convert_to_gguf
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,48 @@ class PipelineConfig:
 
     # Logging
     log_level: str = field(default="INFO", metadata={"help": "Logging level"})
+
+    # Hugging Face Hub upload configuration
+    push_to_hub: bool = field(
+        default=False, metadata={"help": "Upload the final model to Hugging Face Hub"}
+    )
+    hub_repo_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Repository ID for Hugging Face Hub (e.g., 'username/model-name')"
+        },
+    )
+    hub_commit_message: Optional[str] = field(
+        default=None, metadata={"help": "Commit message for Hub upload"}
+    )
+    hub_private: bool = field(
+        default=False, metadata={"help": "Create private repository on Hub"}
+    )
+    hub_token: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Hugging Face authentication token (or set HF_TOKEN env var)"
+        },
+    )
+    push_adapter_only: bool = field(
+        default=False,
+        metadata={"help": "Only upload LoRA adapter files to Hub (not the full model)"},
+    )
+
+    # GGUF conversion configuration
+    convert_to_gguf: bool = field(
+        default=False, metadata={"help": "Convert final model to GGUF format"}
+    )
+    gguf_quantization: str = field(
+        default="q4_0",
+        metadata={"help": "GGUF quantization type (q4_0, q8_0, f16, etc.)"},
+    )
+    gguf_output_path: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Output path for GGUF file (defaults to output_dir/model.gguf)"
+        },
+    )
 
     @classmethod
     def from_yaml(cls, config_path: str) -> "PipelineConfig":
@@ -276,6 +319,7 @@ class Pipeline:
                 break
 
         # Save final model if requested and pipeline succeeded
+        final_model_path = None
         if (
             self.config.save_final_model
             and self.stage_results
@@ -286,6 +330,10 @@ class Pipeline:
 
             model.save_pretrained(final_model_path)  # type: ignore[attr-defined]
             tokenizer.save_pretrained(final_model_path)  # type: ignore[attr-defined]
+
+        # Run post-processing steps if pipeline succeeded
+        if self.stage_results and self.stage_results[-1].success:
+            self._run_post_processing(final_model_path)
 
         # Cleanup intermediate models if requested
         if self.config.cleanup_intermediate:
@@ -306,6 +354,88 @@ class Pipeline:
 
                     shutil.rmtree(model_path)
                     self.logger.info(f"Removed intermediate model: {model_path}")
+
+    def _run_post_processing(self, final_model_path: Optional[str]) -> None:
+        """Run post-processing steps like GGUF conversion and Hub upload."""
+        if not final_model_path:
+            # Use the last successful stage's model path
+            if self.stage_results and self.stage_results[-1].success:
+                final_model_path = self.stage_results[-1].model_path
+                final_tokenizer_path = self.stage_results[-1].tokenizer_path
+            else:
+                self.logger.warning("No final model path available for post-processing")
+                return
+        else:
+            final_tokenizer_path = final_model_path
+
+        self.logger.info("Starting post-processing steps")
+
+        # GGUF conversion
+        gguf_output_path = None
+        if self.config.convert_to_gguf:
+            try:
+                self.logger.info("Converting model to GGUF format")
+
+                # Determine output path
+                if self.config.gguf_output_path:
+                    gguf_output_path = self.config.gguf_output_path
+                else:
+                    gguf_output_path = os.path.join(
+                        self.config.output_dir, "model.gguf"
+                    )
+
+                convert_to_gguf(
+                    model_path=final_model_path,
+                    output_path=gguf_output_path,
+                    quantization=self.config.gguf_quantization,
+                )
+                self.logger.info(f"GGUF conversion completed: {gguf_output_path}")
+
+            except Exception as e:
+                self.logger.error(f"GGUF conversion failed: {e}")
+                # Don't fail the entire pipeline for post-processing errors
+
+        # Hugging Face Hub upload
+        if self.config.push_to_hub:
+            try:
+                if not self.config.hub_repo_id:
+                    self.logger.error("hub_repo_id is required for Hub upload")
+                    return
+
+                self.logger.info(
+                    f"Uploading model to Hugging Face Hub: {self.config.hub_repo_id}"
+                )
+
+                # If GGUF conversion was done and we want to upload GGUF, modify repo_id
+                upload_repo_id = self.config.hub_repo_id
+                upload_model_path = final_model_path
+
+                if gguf_output_path and self.config.convert_to_gguf:
+                    # Upload GGUF version with modified repo name
+                    if not upload_repo_id.endswith("_GGUF"):
+                        upload_repo_id = f"{upload_repo_id}_GGUF"
+
+                    # For GGUF, we need to upload the file differently
+                    self.logger.info(f"Uploading GGUF model to: {upload_repo_id}")
+                    # TODO: Implement GGUF-specific upload logic
+                    # For now, upload the original model
+
+                upload_to_hub(
+                    model_path=upload_model_path,
+                    tokenizer_path=final_tokenizer_path,
+                    repo_id=upload_repo_id,
+                    commit_message=self.config.hub_commit_message,
+                    private=self.config.hub_private,
+                    token=self.config.hub_token,
+                    push_adapter_only=self.config.push_adapter_only,
+                )
+                self.logger.info(f"Hub upload completed: {upload_repo_id}")
+
+            except Exception as e:
+                self.logger.error(f"Hub upload failed: {e}")
+                # Don't fail the entire pipeline for post-processing errors
+
+        self.logger.info("Post-processing steps completed")
 
     def get_summary(self) -> Dict[str, Any]:
         """Get a summary of the pipeline execution."""

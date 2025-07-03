@@ -105,6 +105,58 @@ Examples:
         help="Validate configuration and show pipeline plan without executing",
     )
 
+    # Hugging Face Hub upload options
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the final model to Hugging Face Hub",
+    )
+    parser.add_argument(
+        "--hub_repo_id",
+        type=str,
+        default=None,
+        help="Repository ID for Hugging Face Hub (e.g., 'username/model-name')",
+    )
+    parser.add_argument(
+        "--hub_commit_message",
+        type=str,
+        default=None,
+        help="Commit message for Hub upload",
+    )
+    parser.add_argument(
+        "--hub_private", action="store_true", help="Create private repository on Hub"
+    )
+    parser.add_argument(
+        "--hub_token",
+        type=str,
+        default=None,
+        help="Hugging Face authentication token (or set HF_TOKEN env var)",
+    )
+    parser.add_argument(
+        "--push_adapter_only",
+        action="store_true",
+        help="Only upload LoRA adapter files to Hub (not the full model)",
+    )
+
+    # GGUF conversion options
+    parser.add_argument(
+        "--convert_to_gguf",
+        action="store_true",
+        help="Convert final model to GGUF format",
+    )
+    parser.add_argument(
+        "--gguf_quantization",
+        type=str,
+        default="q4_0",
+        help="GGUF quantization type (q4_0, q8_0, f16, etc.)",
+    )
+    parser.add_argument(
+        "--gguf_output_path",
+        type=str,
+        default=None,
+        help="Output path for GGUF file (defaults to output_dir/model.gguf)",
+    )
+
     args = parser.parse_args()
 
     try:
@@ -134,6 +186,26 @@ Examples:
         if args.cleanup_intermediate:
             config.cleanup_intermediate = args.cleanup_intermediate
 
+        # Apply post-processing overrides
+        if args.push_to_hub:
+            config.push_to_hub = args.push_to_hub
+        if args.hub_repo_id:
+            config.hub_repo_id = args.hub_repo_id
+        if args.hub_commit_message:
+            config.hub_commit_message = args.hub_commit_message
+        if args.hub_private:
+            config.hub_private = args.hub_private
+        if args.hub_token:
+            config.hub_token = args.hub_token
+        if args.push_adapter_only:
+            config.push_adapter_only = args.push_adapter_only
+        if args.convert_to_gguf:
+            config.convert_to_gguf = args.convert_to_gguf
+        if args.gguf_quantization:
+            config.gguf_quantization = args.gguf_quantization
+        if args.gguf_output_path:
+            config.gguf_output_path = args.gguf_output_path
+
         # Validate configuration
         logger.info("Validating configuration...")
         if not config.model_name_or_path:
@@ -156,6 +228,20 @@ Examples:
         logger.info(f"  Stages: {' -> '.join(config.stages)}")
         logger.info(f"  Save final model: {config.save_final_model}")
         logger.info(f"  Cleanup intermediate: {config.cleanup_intermediate}")
+
+        # Show post-processing plan
+        if config.convert_to_gguf or config.push_to_hub:
+            logger.info("Post-processing steps:")
+            if config.convert_to_gguf:
+                logger.info(f"  GGUF conversion: {config.gguf_quantization}")
+                if config.gguf_output_path:
+                    logger.info(f"    Output path: {config.gguf_output_path}")
+            if config.push_to_hub:
+                logger.info(f"  Hub upload: {config.hub_repo_id}")
+                if config.hub_private:
+                    logger.info("    Private repository")
+                if config.push_adapter_only:
+                    logger.info("    Adapter-only upload")
 
         if args.dry_run:
             logger.info("Dry run mode - configuration validated successfully")
