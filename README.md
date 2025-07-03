@@ -1,10 +1,10 @@
-# FNSFT -- Functional Network Supervised Fine-Tuning
+# LM Pipeline
 
-A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques. Now featuring a **modular pipeline architecture** that supports multi-algorithm fine-tuning workflows including SFT, DPO, RLAIF, RL, and Chain-of-Thought distillation.
+A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques featuring a **modular pipeline architecture** that supports multi-algorithm fine-tuning workflows including SFT, DPO, RLAIF, RL, Chain-of-Thought distillation, or your own algorithm
 
 ## 🚀 Features
 
-### 🔗 Modular Pipeline Architecture (NEW!)
+### 🔗 Modular Pipeline Architecture
 
 - **🎯 Multi-Algorithm Training**: Chain SFT → DPO → RLAIF → RL → CoT Distillation
 - **⚙️ Configurable Workflows**: Run any combination of algorithms in any order
@@ -94,9 +94,9 @@ python -m fnsft.sft_trainer \
     --convert_to_gguf
 ```
 
-### 🔗 NEW: Modular Pipeline Usage
+### 🔗 Modular Pipeline Usage Examples
 
-#### SFT-Only Pipeline (Backward Compatible)
+#### SFT-Only Pipeline
 
 ```bash
 # Use the new pipeline system for SFT training
@@ -144,32 +144,12 @@ stage_configs:
     teacher_model_type: "api"
 ```
 
-### Using Configuration Files (Legacy SFT)
+### Using Configuration Files (Stand alone SFT)
 
 ```bash
 python -m fnsft.sft_trainer --config configs/llama_7b_config.yaml
 ```
 
-## 📁 Project Structure
-
-```text
-fnsft/
-├── src/fnsft/
-│   ├── __init__.py
-│   └── sft_trainer.py          # Main training script
-├── examples/
-│   ├── example_usage.py        # Usage examples
-│   └── sample_data.jsonl       # Sample dataset
-├── configs/
-│   └── llama_7b_config.yaml    # Example configuration
-├── docs/
-│   └── README.md               # Detailed documentation
-├── tests/
-│   └── test_sft_trainer.py     # Unit tests
-├── requirements.txt            # Dependencies
-├── pyproject.toml             # Project configuration
-└── README.md                  # This file
-```
 
 ## 🎯 Supported Models
 
@@ -181,7 +161,7 @@ fnsft/
 
 ## 📊 Data Format
 
-FNSFT now supports **automatic dataset format detection and conversion**! You can use datasets in various formats without manual preprocessing.
+LM Pipeline supports **automatic dataset format detection and conversion**! You can use datasets in various formats without manual preprocessing.
 
 ### Supported Formats
 
@@ -281,7 +261,7 @@ Your dataset should be in JSONL format (one JSON object per line):
 
 ## 🤗 Hugging Face Hub Integration
 
-FNSFT includes seamless integration with Hugging Face Hub for uploading your fine-tuned models.
+LM Pipeline includes seamless integration with Hugging Face Hub for uploading your fine-tuned models.
 
 ### Authentication Setup
 
