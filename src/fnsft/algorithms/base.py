@@ -1,5 +1,5 @@
 """
-Base classes for pipeline stages.
+Base classes for pipeline algorithms.
 """
 
 import logging
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class StageConfig:
-    """Base configuration for pipeline stages."""
+    """Base configuration for pipeline algorithms."""
 
     stage_name: str = field(metadata={"help": "Name of the stage"})
     output_dir: str = field(metadata={"help": "Output directory for this stage"})
@@ -47,7 +47,7 @@ class StageConfig:
 
 @dataclass
 class StageResult:
-    """Result from executing a pipeline stage."""
+    """Result from executing a pipeline algorithm."""
 
     stage_name: str
     success: bool
@@ -66,7 +66,7 @@ class StageResult:
 
 
 class BaseStage(ABC):
-    """Abstract base class for all pipeline stages."""
+    """Abstract base class for all pipeline algorithms."""
 
     def __init__(self, config: StageConfig):
         """Initialize the stage with configuration."""

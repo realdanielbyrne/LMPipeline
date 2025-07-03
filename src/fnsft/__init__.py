@@ -6,7 +6,7 @@ Modular pipeline for SFT, DPO, RLAIF, RL, and CoT Distillation.
 __version__ = "0.1.0"
 
 from .pipeline import Pipeline, PipelineConfig
-from .stages import (
+from .algorithms import (
     BaseStage,
     SFTStage,
     DPOStage,

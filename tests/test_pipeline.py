@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.fnsft.pipeline import Pipeline, PipelineConfig
-from src.fnsft.stages.base import BaseStage, StageConfig, StageResult
+from src.fnsft.algorithms.base import BaseStage, StageConfig, StageResult
 
 
 class MockStage(BaseStage):

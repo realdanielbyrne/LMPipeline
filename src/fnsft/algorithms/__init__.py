@@ -1,5 +1,5 @@
 """
-Pipeline stages for modular fine-tuning.
+Pipeline algorithms for modular fine-tuning.
 """
 
 from .base import BaseStage, StageConfig, StageResult
@@ -11,7 +11,7 @@ from .cot_distillation import CoTDistillationStage, CoTDistillationConfig
 
 __all__ = [
     "BaseStage",
-    "StageConfig", 
+    "StageConfig",
     "StageResult",
     "SFTStage",
     "SFTConfig",
@@ -19,7 +19,7 @@ __all__ = [
     "DPOConfig",
     "RLAIFStage",
     "RLAIFConfig",
-    "RLStage", 
+    "RLStage",
     "RLConfig",
     "CoTDistillationStage",
     "CoTDistillationConfig",

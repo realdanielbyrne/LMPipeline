@@ -1,16 +1,16 @@
 # FNSFT -- Functional Network Supervised Fine-Tuning
 
-A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques. Now featuring a **modular pipeline architecture** that supports multi-stage fine-tuning workflows including SFT, DPO, RLAIF, RL, and Chain-of-Thought distillation.
+A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques. Now featuring a **modular pipeline architecture** that supports multi-algorithm fine-tuning workflows including SFT, DPO, RLAIF, RL, and Chain-of-Thought distillation.
 
 ## 🚀 Features
 
 ### 🔗 Modular Pipeline Architecture (NEW!)
 
-- **🎯 Multi-Stage Training**: Chain SFT → DPO → RLAIF → RL → CoT Distillation
-- **⚙️ Configurable Workflows**: Run any combination of stages in any order
-- **🔄 Stage Orchestration**: Automatic model passing between stages
-- **📊 Pipeline Monitoring**: Track progress and metrics across all stages
-- **🛠️ Extensible Design**: Easy to add custom training stages
+- **🎯 Multi-Algorithm Training**: Chain SFT → DPO → RLAIF → RL → CoT Distillation
+- **⚙️ Configurable Workflows**: Run any combination of algorithms in any order
+- **🔄 Algorithm Orchestration**: Automatic model passing between algorithms
+- **📊 Pipeline Monitoring**: Track progress and metrics across all algorithms
+- **🛠️ Extensible Design**: Easy to add custom training algorithms
 
 ### 🔧 Core Training Features
 
@@ -103,13 +103,13 @@ python -m fnsft.sft_trainer \
 fnsft-pipeline --config configs/sft_only_config.yaml
 ```
 
-#### Multi-Stage Pipeline
+#### Multi-Algorithm Pipeline
 
 ```bash
 # Run a complete SFT → DPO → RLAIF pipeline
 fnsft-pipeline --config configs/pipeline_config.yaml
 
-# Run specific stages only
+# Run specific algorithms only
 fnsft-pipeline --config configs/pipeline_config.yaml --stages sft dpo
 
 # Dry run to validate configuration
@@ -119,7 +119,7 @@ fnsft-pipeline --config configs/pipeline_config.yaml --dry_run
 #### Pipeline Configuration Example
 
 ```yaml
-# Multi-stage pipeline configuration
+# Multi-algorithm pipeline configuration
 model_name_or_path: "microsoft/DialoGPT-medium"
 output_dir: "./outputs/pipeline_run"
 stages:

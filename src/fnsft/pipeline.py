@@ -12,12 +12,12 @@ import torch
 import yaml
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from .stages.base import BaseStage, StageConfig, StageResult
-from .stages.sft import SFTStage
-from .stages.dpo import DPOStage
-from .stages.rlaif import RLAIFStage
-from .stages.rl import RLStage
-from .stages.cot_distillation import CoTDistillationStage
+from .algorithms.base import BaseStage, StageConfig, StageResult
+from .algorithms.sft import SFTStage
+from .algorithms.dpo import DPOStage
+from .algorithms.rlaif import RLAIFStage
+from .algorithms.rl import RLStage
+from .algorithms.cot_distillation import CoTDistillationStage
 
 logger = logging.getLogger(__name__)
 

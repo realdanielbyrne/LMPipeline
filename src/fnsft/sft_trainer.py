@@ -67,11 +67,11 @@ class ModelArguments:
         }
     )
     use_auth_token: bool = field(
-        default=False,
+        default=True,
         metadata={"help": "Use HuggingFace auth token for private models"},
     )
     trust_remote_code: bool = field(
-        default=False, metadata={"help": "Trust remote code when loading model"}
+        default=True, metadata={"help": "Trust remote code when loading model"}
     )
     torch_dtype: str = field(
         default="auto",
