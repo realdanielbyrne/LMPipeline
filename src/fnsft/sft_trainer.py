@@ -143,198 +143,15 @@ class LoRAArguments:
     )
 
 
-class DatasetFormatter:
-    """Handles automatic detection and conversion of different dataset formats."""
-
-    # Common dataset format mappings
-    FORMAT_MAPPINGS = {
-        # Standard instruction-response formats
-        ("instruction", "response"): lambda item: {
-            "instruction": item["instruction"],
-            "response": item["response"],
-        },
-        ("instruction", "output"): lambda item: {
-            "instruction": item["instruction"],
-            "response": item["output"],
-        },
-        # Instruction with input context
-        ("instruction", "input", "output"): lambda item: {
-            "instruction": (
-                f"{item['instruction']}\n\nInput: {item['input']}"
-                if item.get("input", "").strip()
-                else item["instruction"]
-            ),
-            "response": item["output"],
-        },
-        # Prompt-completion formats
-        ("prompt", "completion"): lambda item: {
-            "instruction": item["prompt"],
-            "response": item["completion"],
-        },
-        ("prompt", "response"): lambda item: {
-            "instruction": item["prompt"],
-            "response": item["response"],
-        },
-        # Question-answer formats
-        ("question", "answer"): lambda item: {
-            "instruction": item["question"],
-            "response": item["answer"],
-        },
-        # Context-based formats
-        ("context", "question", "answer"): lambda item: {
-            "instruction": f"Context: {item['context']}\n\nQuestion: {item['question']}",
-            "response": item["answer"],
-        },
-        # Text-only format (already formatted)
-        ("text",): lambda item: {"text": item["text"]},
-    }
-
-    @staticmethod
-    def detect_format(data: List[Dict[str, Any]]) -> tuple:
-        """
-        Detect the format of the dataset by examining the first few samples.
-
-        Args:
-            data: List of dataset samples
-
-        Returns:
-            Tuple of column names representing the detected format
-        """
-        if not data:
-            raise ValueError("Dataset is empty")
-
-        # Check first few samples to determine format
-        sample_size = min(5, len(data))
-        common_keys = None
-
-        for i in range(sample_size):
-            item = data[i]
-            if not isinstance(item, dict):
-                raise ValueError(f"Dataset item {i} is not a dictionary")
-
-            item_keys = set(item.keys())
-            if common_keys is None:
-                common_keys = item_keys
-            else:
-                common_keys = common_keys.intersection(item_keys)
-
-        if not common_keys:
-            raise ValueError("No common keys found across dataset samples")
-
-        # Sort keys for consistent format detection
-        sorted_keys = tuple(sorted(common_keys))
-
-        # Check for known formats in order of preference
-        format_priority = [
-            ("instruction", "input", "output"),
-            ("instruction", "response"),
-            ("instruction", "output"),
-            ("prompt", "completion"),
-            ("prompt", "response"),
-            ("question", "answer"),
-            ("context", "question", "answer"),
-            ("text",),
-        ]
-
-        for format_keys in format_priority:
-            if all(key in common_keys for key in format_keys):
-                return format_keys
-
-        # If no known format is detected, check for conversational format
-        if "messages" in common_keys:
-            return ("messages",)
-
-        # Fallback: use all available keys
-        logger.warning(
-            f"Unknown dataset format detected. Available keys: {sorted_keys}"
-        )
-        return sorted_keys
-
-    @staticmethod
-    def convert_to_standard_format(
-        item: Dict[str, Any], format_keys: tuple
-    ) -> Dict[str, str]:
-        """
-        Convert a dataset item to standard instruction-response format.
-
-        Args:
-            item: Dataset item
-            format_keys: Detected format keys
-
-        Returns:
-            Dictionary with 'instruction' and 'response' keys or 'text' key
-        """
-        if format_keys in DatasetFormatter.FORMAT_MAPPINGS:
-            return DatasetFormatter.FORMAT_MAPPINGS[format_keys](item)
-        elif format_keys == ("messages",):
-            return DatasetFormatter._convert_conversational_format(item)
-        else:
-            # Fallback: try to infer the format
-            return DatasetFormatter._infer_and_convert(item, format_keys)
-
-    @staticmethod
-    def _convert_conversational_format(item: Dict[str, Any]) -> Dict[str, str]:
-        """Convert conversational format to instruction-response format."""
-        messages = item.get("messages", [])
-        if not messages:
-            raise ValueError("Empty messages in conversational format")
-
-        # Extract user messages as instruction and assistant messages as response
-        user_messages = []
-        assistant_messages = []
-
-        for msg in messages:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-
-            if role == "user":
-                user_messages.append(content)
-            elif role == "assistant":
-                assistant_messages.append(content)
-
-        if not user_messages:
-            raise ValueError("No user messages found in conversational format")
-
-        instruction = "\n".join(user_messages)
-        response = "\n".join(assistant_messages) if assistant_messages else ""
-
-        return {"instruction": instruction, "response": response}
-
-    @staticmethod
-    def _infer_and_convert(item: Dict[str, Any], format_keys: tuple) -> Dict[str, str]:
-        """Infer format and convert to standard format."""
-        # Try to identify instruction-like and response-like fields
-        instruction_candidates = ["instruction", "prompt", "question", "input", "query"]
-        response_candidates = [
-            "response",
-            "output",
-            "answer",
-            "completion",
-            "target",
-            "result",
-        ]
-
-        instruction_key = None
-        response_key = None
-
-        for key in format_keys:
-            key_lower = key.lower()
-            if any(candidate in key_lower for candidate in instruction_candidates):
-                instruction_key = key
-            elif any(candidate in key_lower for candidate in response_candidates):
-                response_key = key
-
-        if instruction_key and response_key:
-            return {
-                "instruction": str(item[instruction_key]),
-                "response": str(item[response_key]),
-            }
-        elif len(format_keys) == 1 and "text" in format_keys:
-            return {"text": str(item["text"])}
-        else:
-            # Last resort: concatenate all fields
-            combined_text = " ".join(str(item[key]) for key in format_keys)
-            return {"text": combined_text}
+# Import shared utilities
+from .utils.dataset_utils import DatasetFormatter
+from .utils.model_utils import (
+    load_quantization_config,
+    setup_lora,
+    load_dataset_from_path,
+    split_dataset,
+    save_model_and_tokenizer,
+)
 
 
 class InstructionDataset(Dataset):
@@ -433,23 +250,14 @@ class InstructionDataset(Dataset):
         }
 
 
-def load_quantization_config(
+def load_quantization_config_from_args(
     quant_args: QuantizationArguments,
 ) -> Optional[BitsAndBytesConfig]:
-    """Load quantization configuration."""
-    if not (quant_args.use_4bit or quant_args.use_8bit):
-        return None
-
-    if quant_args.use_8bit:
-        logger.info("Using 8-bit quantization")
-        return BitsAndBytesConfig(load_in_8bit=True)
-
-    logger.info("Using 4-bit quantization")
-    compute_dtype = getattr(torch, quant_args.bnb_4bit_compute_dtype)
-
-    return BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=compute_dtype,
+    """Load quantization configuration from arguments."""
+    return load_quantization_config(
+        use_4bit=quant_args.use_4bit,
+        use_8bit=quant_args.use_8bit,
+        bnb_4bit_compute_dtype=quant_args.bnb_4bit_compute_dtype,
         bnb_4bit_quant_type=quant_args.bnb_4bit_quant_type,
         bnb_4bit_use_double_quant=quant_args.bnb_4bit_use_double_quant,
     )
@@ -494,100 +302,26 @@ def load_model_and_tokenizer(
     return model, tokenizer
 
 
-def setup_lora(model: PreTrainedModel, lora_args: LoRAArguments) -> PreTrainedModel:
-    """Setup LoRA configuration for the model."""
-    logger.info("Setting up LoRA configuration")
-
-    # Prepare model for k-bit training
-    model = prepare_model_for_kbit_training(model)
-
-    # Auto-detect target modules if not specified
-    target_modules = lora_args.lora_target_modules
-    if target_modules is None:
-        # Common target modules for different architectures
-        if hasattr(model, "config") and hasattr(model.config, "model_type"):
-            model_type = model.config.model_type.lower()
-            if "llama" in model_type or "mistral" in model_type:
-                target_modules = [
-                    "q_proj",
-                    "k_proj",
-                    "v_proj",
-                    "o_proj",
-                    "gate_proj",
-                    "up_proj",
-                    "down_proj",
-                ]
-            elif "gpt" in model_type:
-                target_modules = ["c_attn", "c_proj", "c_fc"]
-            else:
-                # Fallback: find all linear layers
-                target_modules = []
-                if hasattr(model, "named_modules"):
-                    for name, module in model.named_modules():
-                        if isinstance(module, nn.Linear):
-                            target_modules.append(name.split(".")[-1])
-                target_modules = list(set(target_modules))
-
-        logger.info(f"Auto-detected target modules: {target_modules}")
-
-    # Configure LoRA
-    lora_config = LoraConfig(
-        r=lora_args.lora_r,
+def setup_lora_from_args(
+    model: PreTrainedModel, lora_args: LoRAArguments
+) -> PreTrainedModel:
+    """Setup LoRA configuration from arguments."""
+    return setup_lora(
+        model=model,
+        lora_r=lora_args.lora_r,
         lora_alpha=lora_args.lora_alpha,
-        target_modules=target_modules,
         lora_dropout=lora_args.lora_dropout,
-        bias=lora_args.lora_bias,
-        task_type=TaskType.CAUSAL_LM,
+        lora_target_modules=lora_args.lora_target_modules,
+        lora_bias=lora_args.lora_bias,
     )
 
-    # Apply LoRA to model
-    model = get_peft_model(model, lora_config)  # type: ignore
-    ptp = getattr(model, "print_trainable_parameters", None)
-    if callable(ptp):
-        ptp()
 
-    return model
-
-
-def load_dataset_from_path(data_args: DataArguments) -> List[Dict[str, Any]]:
-    """Load dataset from local file or HuggingFace hub."""
-    dataset_path = data_args.dataset_name_or_path
-    if os.path.isfile(dataset_path):
-        logger.info(f"Loading dataset from local file: {dataset_path}")
-        # Load from local file
-        if dataset_path.endswith(".json"):
-            with open(dataset_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        elif dataset_path.endswith(".jsonl"):
-            data = []
-            with open(dataset_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    data.append(json.loads(line.strip()))
-        else:
-            raise ValueError(f"Unsupported file format: {dataset_path}")
-    else:
-        logger.info(f"Loading dataset from HuggingFace hub: {dataset_path}")
-        dataset = load_dataset(
-            dataset_path, data_args.dataset_config_name, split="train"
-        )
-        data = [item for item in dataset]
-    logger.info(f"Loaded {len(data)} examples")
-    return data  # type: ignore
-
-
-def split_dataset(
-    data: List[Dict[str, Any]], validation_split: float = 0.1
-) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Split dataset into train and validation sets."""
-    if validation_split <= 0:
-        return data, []
-
-    split_idx = int(len(data) * (1 - validation_split))
-    train_data = data[:split_idx]
-    val_data = data[split_idx:]
-
-    logger.info(f"Split dataset: {len(train_data)} train, {len(val_data)} validation")
-    return train_data, val_data
+def load_dataset_from_args(data_args: DataArguments) -> List[Dict[str, Any]]:
+    """Load dataset from arguments."""
+    return load_dataset_from_path(
+        dataset_name_or_path=data_args.dataset_name_or_path,
+        dataset_config_name=data_args.dataset_config_name,
+    )
 
 
 def create_trainer(
@@ -616,22 +350,7 @@ def create_trainer(
     return trainer
 
 
-def save_model_and_tokenizer(
-    model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, output_dir: str
-) -> None:
-    """Save the fine-tuned model and tokenizer."""
-    logger.info(f"Saving model to {output_dir}")
-
-    # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save model and tokenizer
-    if hasattr(model, "save_pretrained"):
-        model.save_pretrained(output_dir)
-    if hasattr(tokenizer, "save_pretrained"):
-        tokenizer.save_pretrained(output_dir)
-
-    logger.info("Model and tokenizer saved successfully")
+# save_model_and_tokenizer is now imported from utils.model_utils
 
 
 def convert_to_gguf(
@@ -1231,16 +950,16 @@ def main():
 
     try:
         # Load quantization config
-        quant_config = load_quantization_config(quant_args)
+        quant_config = load_quantization_config_from_args(quant_args)
 
         # Load model and tokenizer
         model, tokenizer = load_model_and_tokenizer(model_args, quant_config)
 
         # Setup LoRA
-        model = setup_lora(model, lora_args)
+        model = setup_lora_from_args(model, lora_args)
 
         # Load and prepare dataset
-        data = load_dataset_from_path(data_args)
+        data = load_dataset_from_args(data_args)
         train_data, val_data = split_dataset(data, data_args.validation_split)
 
         # Create datasets

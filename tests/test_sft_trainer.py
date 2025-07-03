@@ -20,18 +20,20 @@ from fnsft.sft_trainer import (
     QuantizationArguments,
     LoRAArguments,
     InstructionDataset,
-    DatasetFormatter,
+    load_config_from_yaml,
+    upload_to_hub,
+)
+from fnsft.utils.dataset_utils import DatasetFormatter
+from fnsft.utils.model_utils import (
     load_quantization_config,
     load_dataset_from_path,
     split_dataset,
-    load_config_from_yaml,
-    upload_to_hub,
 )
 
 
 class TestDataArguments(unittest.TestCase):
     """Test data argument dataclass."""
-    
+
     def test_default_values(self):
         """Test default values are set correctly."""
         args = DataArguments(dataset_name_or_path="test_dataset")
@@ -42,35 +44,35 @@ class TestDataArguments(unittest.TestCase):
 
 class TestQuantizationConfig(unittest.TestCase):
     """Test quantization configuration."""
-    
+
     def test_4bit_config(self):
         """Test 4-bit quantization configuration."""
         args = QuantizationArguments(use_4bit=True, use_8bit=False)
         config = load_quantization_config(args)
-        
+
         self.assertIsNotNone(config)
         self.assertTrue(config.load_in_4bit)
         self.assertEqual(config.bnb_4bit_quant_type, "nf4")
-    
+
     def test_8bit_config(self):
         """Test 8-bit quantization configuration."""
         args = QuantizationArguments(use_4bit=False, use_8bit=True)
         config = load_quantization_config(args)
-        
+
         self.assertIsNotNone(config)
         self.assertTrue(config.load_in_8bit)
-    
+
     def test_no_quantization(self):
         """Test no quantization."""
         args = QuantizationArguments(use_4bit=False, use_8bit=False)
         config = load_quantization_config(args)
-        
+
         self.assertIsNone(config)
 
 
 class TestInstructionDataset(unittest.TestCase):
     """Test instruction dataset class."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         # Create a mock tokenizer
@@ -78,44 +80,37 @@ class TestInstructionDataset(unittest.TestCase):
         self.tokenizer.pad_token = None
         self.tokenizer.eos_token = "<eos>"
         self.tokenizer.eos_token_id = 2
-        
+
         # Mock tokenizer call
         self.tokenizer.return_value = {
             "input_ids": torch.tensor([[1, 2, 3, 4, 5]]),
-            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]])
+            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]]),
         }
-        
+
         self.sample_data = [
-            {
-                "instruction": "What is 2+2?",
-                "response": "2+2 equals 4."
-            },
-            {
-                "text": "This is a sample text."
-            }
+            {"instruction": "What is 2+2?", "response": "2+2 equals 4."},
+            {"text": "This is a sample text."},
         ]
-    
+
     def test_dataset_creation(self):
         """Test dataset creation with instruction-response format."""
         dataset = InstructionDataset(
             data=self.sample_data[:1],  # Only instruction-response format
             tokenizer=self.tokenizer,
-            max_length=512
+            max_length=512,
         )
-        
+
         self.assertEqual(len(dataset), 1)
         self.assertEqual(self.tokenizer.pad_token, "<eos>")
-    
+
     def test_dataset_getitem(self):
         """Test dataset __getitem__ method."""
         dataset = InstructionDataset(
-            data=self.sample_data[:1],
-            tokenizer=self.tokenizer,
-            max_length=512
+            data=self.sample_data[:1], tokenizer=self.tokenizer, max_length=512
         )
-        
+
         item = dataset[0]
-        
+
         self.assertIn("input_ids", item)
         self.assertIn("attention_mask", item)
         self.assertIn("labels", item)
@@ -124,57 +119,55 @@ class TestInstructionDataset(unittest.TestCase):
 
 class TestDatasetLoading(unittest.TestCase):
     """Test dataset loading functions."""
-    
+
     def test_load_json_file(self):
         """Test loading from JSON file."""
-        sample_data = [
-            {"instruction": "Test instruction", "response": "Test response"}
-        ]
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        sample_data = [{"instruction": "Test instruction", "response": "Test response"}]
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sample_data, f)
             temp_file = f.name
-        
+
         try:
             args = DataArguments(dataset_name_or_path=temp_file)
             data = load_dataset_from_path(args)
-            
+
             self.assertEqual(len(data), 1)
             self.assertEqual(data[0]["instruction"], "Test instruction")
         finally:
             os.unlink(temp_file)
-    
+
     def test_load_jsonl_file(self):
         """Test loading from JSONL file."""
         sample_data = [
             {"instruction": "Test 1", "response": "Response 1"},
-            {"instruction": "Test 2", "response": "Response 2"}
+            {"instruction": "Test 2", "response": "Response 2"},
         ]
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             for item in sample_data:
-                f.write(json.dumps(item) + '\n')
+                f.write(json.dumps(item) + "\n")
             temp_file = f.name
-        
+
         try:
             args = DataArguments(dataset_name_or_path=temp_file)
             data = load_dataset_from_path(args)
-            
+
             self.assertEqual(len(data), 2)
             self.assertEqual(data[0]["instruction"], "Test 1")
             self.assertEqual(data[1]["instruction"], "Test 2")
         finally:
             os.unlink(temp_file)
-    
+
     def test_split_dataset(self):
         """Test dataset splitting."""
         data = [{"text": f"Sample {i}"} for i in range(100)]
-        
+
         train_data, val_data = split_dataset(data, validation_split=0.2)
-        
+
         self.assertEqual(len(train_data), 80)
         self.assertEqual(len(val_data), 20)
-        
+
         # Test no validation split
         train_data, val_data = split_dataset(data, validation_split=0.0)
         self.assertEqual(len(train_data), 100)
@@ -187,8 +180,16 @@ class TestDatasetFormatter(unittest.TestCase):
     def test_detect_alpaca_format(self):
         """Test detection of Alpaca format (instruction + input + output)."""
         data = [
-            {"instruction": "What is AI?", "input": "", "output": "AI is artificial intelligence."},
-            {"instruction": "Explain ML", "input": "in simple terms", "output": "ML is machine learning."}
+            {
+                "instruction": "What is AI?",
+                "input": "",
+                "output": "AI is artificial intelligence.",
+            },
+            {
+                "instruction": "Explain ML",
+                "input": "in simple terms",
+                "output": "ML is machine learning.",
+            },
         ]
 
         detected_format = DatasetFormatter.detect_format(data)
@@ -198,7 +199,7 @@ class TestDatasetFormatter(unittest.TestCase):
         """Test detection of prompt-completion format."""
         data = [
             {"prompt": "What is AI?", "completion": "AI is artificial intelligence."},
-            {"prompt": "Explain ML", "completion": "ML is machine learning."}
+            {"prompt": "Explain ML", "completion": "ML is machine learning."},
         ]
 
         detected_format = DatasetFormatter.detect_format(data)
@@ -208,7 +209,7 @@ class TestDatasetFormatter(unittest.TestCase):
         """Test detection of question-answer format."""
         data = [
             {"question": "What is AI?", "answer": "AI is artificial intelligence."},
-            {"question": "Explain ML", "answer": "ML is machine learning."}
+            {"question": "Explain ML", "answer": "ML is machine learning."},
         ]
 
         detected_format = DatasetFormatter.detect_format(data)
@@ -217,8 +218,18 @@ class TestDatasetFormatter(unittest.TestCase):
     def test_detect_conversational_format(self):
         """Test detection of conversational format."""
         data = [
-            {"messages": [{"role": "user", "content": "What is AI?"}, {"role": "assistant", "content": "AI is artificial intelligence."}]},
-            {"messages": [{"role": "user", "content": "Explain ML"}, {"role": "assistant", "content": "ML is machine learning."}]}
+            {
+                "messages": [
+                    {"role": "user", "content": "What is AI?"},
+                    {"role": "assistant", "content": "AI is artificial intelligence."},
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "Explain ML"},
+                    {"role": "assistant", "content": "ML is machine learning."},
+                ]
+            },
         ]
 
         detected_format = DatasetFormatter.detect_format(data)
@@ -227,8 +238,12 @@ class TestDatasetFormatter(unittest.TestCase):
     def test_detect_text_format(self):
         """Test detection of text format."""
         data = [
-            {"text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI is artificial intelligence."},
-            {"text": "### Instruction:\nExplain ML\n\n### Response:\nML is machine learning."}
+            {
+                "text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI is artificial intelligence."
+            },
+            {
+                "text": "### Instruction:\nExplain ML\n\n### Response:\nML is machine learning."
+            },
         ]
 
         detected_format = DatasetFormatter.detect_format(data)
@@ -236,7 +251,11 @@ class TestDatasetFormatter(unittest.TestCase):
 
     def test_convert_alpaca_format(self):
         """Test conversion of Alpaca format."""
-        item = {"instruction": "What is AI?", "input": "explain briefly", "output": "AI is artificial intelligence."}
+        item = {
+            "instruction": "What is AI?",
+            "input": "explain briefly",
+            "output": "AI is artificial intelligence.",
+        }
         format_keys = ("instruction", "input", "output")
 
         converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
@@ -248,7 +267,11 @@ class TestDatasetFormatter(unittest.TestCase):
 
     def test_convert_alpaca_format_empty_input(self):
         """Test conversion of Alpaca format with empty input."""
-        item = {"instruction": "What is AI?", "input": "", "output": "AI is artificial intelligence."}
+        item = {
+            "instruction": "What is AI?",
+            "input": "",
+            "output": "AI is artificial intelligence.",
+        }
         format_keys = ("instruction", "input", "output")
 
         converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
@@ -278,10 +301,12 @@ class TestDatasetFormatter(unittest.TestCase):
 
     def test_convert_conversational_format(self):
         """Test conversion of conversational format."""
-        item = {"messages": [
-            {"role": "user", "content": "What is AI?"},
-            {"role": "assistant", "content": "AI is artificial intelligence."}
-        ]}
+        item = {
+            "messages": [
+                {"role": "user", "content": "What is AI?"},
+                {"role": "assistant", "content": "AI is artificial intelligence."},
+            ]
+        }
         format_keys = ("messages",)
 
         converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
@@ -291,12 +316,17 @@ class TestDatasetFormatter(unittest.TestCase):
 
     def test_convert_conversational_format_multi_turn(self):
         """Test conversion of multi-turn conversational format."""
-        item = {"messages": [
-            {"role": "user", "content": "What is AI?"},
-            {"role": "assistant", "content": "AI is artificial intelligence."},
-            {"role": "user", "content": "Tell me more"},
-            {"role": "assistant", "content": "AI involves machine learning and neural networks."}
-        ]}
+        item = {
+            "messages": [
+                {"role": "user", "content": "What is AI?"},
+                {"role": "assistant", "content": "AI is artificial intelligence."},
+                {"role": "user", "content": "Tell me more"},
+                {
+                    "role": "assistant",
+                    "content": "AI involves machine learning and neural networks.",
+                },
+            ]
+        }
         format_keys = ("messages",)
 
         converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
@@ -308,7 +338,9 @@ class TestDatasetFormatter(unittest.TestCase):
 
     def test_convert_text_format(self):
         """Test conversion of text format (should pass through unchanged)."""
-        item = {"text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI is artificial intelligence."}
+        item = {
+            "text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI is artificial intelligence."
+        }
         format_keys = ("text",)
 
         converted = DatasetFormatter.convert_to_standard_format(item, format_keys)
@@ -351,22 +383,27 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
         # Mock tokenizer call
         mock_encoding = {
             "input_ids": torch.tensor([[1, 2, 3, 4, 5]]),
-            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]])
+            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]]),
         }
         self.tokenizer.return_value = mock_encoding
 
     def test_auto_detect_alpaca_format(self):
         """Test auto-detection with Alpaca format."""
         data = [
-            {"instruction": "What is AI?", "input": "", "output": "AI is artificial intelligence."},
-            {"instruction": "Explain ML", "input": "briefly", "output": "ML is machine learning."}
+            {
+                "instruction": "What is AI?",
+                "input": "",
+                "output": "AI is artificial intelligence.",
+            },
+            {
+                "instruction": "Explain ML",
+                "input": "briefly",
+                "output": "ML is machine learning.",
+            },
         ]
 
         dataset = InstructionDataset(
-            data=data,
-            tokenizer=self.tokenizer,
-            max_length=512,
-            auto_detect_format=True
+            data=data, tokenizer=self.tokenizer, max_length=512, auto_detect_format=True
         )
 
         self.assertEqual(dataset.detected_format, ("instruction", "input", "output"))
@@ -376,14 +413,11 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
         """Test auto-detection with prompt-completion format."""
         data = [
             {"prompt": "What is AI?", "completion": "AI is artificial intelligence."},
-            {"prompt": "Explain ML", "completion": "ML is machine learning."}
+            {"prompt": "Explain ML", "completion": "ML is machine learning."},
         ]
 
         dataset = InstructionDataset(
-            data=data,
-            tokenizer=self.tokenizer,
-            max_length=512,
-            auto_detect_format=True
+            data=data, tokenizer=self.tokenizer, max_length=512, auto_detect_format=True
         )
 
         self.assertEqual(dataset.detected_format, ("prompt", "completion"))
@@ -392,15 +426,18 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
     def test_auto_detect_disabled(self):
         """Test with auto-detection disabled."""
         data = [
-            {"instruction": "What is AI?", "response": "AI is artificial intelligence."},
-            {"instruction": "Explain ML", "response": "ML is machine learning."}
+            {
+                "instruction": "What is AI?",
+                "response": "AI is artificial intelligence.",
+            },
+            {"instruction": "Explain ML", "response": "ML is machine learning."},
         ]
 
         dataset = InstructionDataset(
             data=data,
             tokenizer=self.tokenizer,
             max_length=512,
-            auto_detect_format=False
+            auto_detect_format=False,
         )
 
         self.assertIsNone(dataset.detected_format)
@@ -413,10 +450,7 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
         ]
 
         dataset = InstructionDataset(
-            data=data,
-            tokenizer=self.tokenizer,
-            max_length=512,
-            auto_detect_format=True
+            data=data, tokenizer=self.tokenizer, max_length=512, auto_detect_format=True
         )
 
         item = dataset[0]
@@ -434,10 +468,7 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
 
         # Create dataset with auto-detection but force a conversion error
         dataset = InstructionDataset(
-            data=data,
-            tokenizer=self.tokenizer,
-            max_length=512,
-            auto_detect_format=True
+            data=data, tokenizer=self.tokenizer, max_length=512, auto_detect_format=True
         )
 
         # Manually set a bad format to trigger fallback
@@ -452,10 +483,7 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
         data = []
 
         dataset = InstructionDataset(
-            data=data,
-            tokenizer=self.tokenizer,
-            max_length=512,
-            auto_detect_format=True
+            data=data, tokenizer=self.tokenizer, max_length=512, auto_detect_format=True
         )
 
         self.assertIsNone(dataset.detected_format)
@@ -463,15 +491,10 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
 
     def test_unsupported_format_fallback(self):
         """Test fallback handling for completely unsupported format."""
-        data = [
-            {"unknown_field": "some value"}
-        ]
+        data = [{"unknown_field": "some value"}]
 
         dataset = InstructionDataset(
-            data=data,
-            tokenizer=self.tokenizer,
-            max_length=512,
-            auto_detect_format=True
+            data=data, tokenizer=self.tokenizer, max_length=512, auto_detect_format=True
         )
 
         # Should work due to fallback logic (converts to text format)
@@ -481,24 +504,25 @@ class TestEnhancedInstructionDataset(unittest.TestCase):
 
 class TestConfigLoading(unittest.TestCase):
     """Test configuration file loading."""
-    
+
     def test_yaml_config_loading(self):
         """Test loading YAML configuration."""
         config_data = {
             "model_name_or_path": "test_model",
             "learning_rate": 1e-4,
             "num_train_epochs": 5,
-            "use_4bit": True
+            "use_4bit": True,
         }
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             import yaml
+
             yaml.dump(config_data, f)
             temp_file = f.name
-        
+
         try:
             config = load_config_from_yaml(temp_file)
-            
+
             self.assertEqual(config["model_name_or_path"], "test_model")
             self.assertEqual(config["learning_rate"], 1e-4)
             self.assertEqual(config["num_train_epochs"], 5)
@@ -547,6 +571,7 @@ class TestHubUpload(unittest.TestCase):
     def tearDown(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_invalid_repo_id(self):
@@ -555,7 +580,7 @@ class TestHubUpload(unittest.TestCase):
             upload_to_hub(
                 model_path=self.model_path,
                 tokenizer=self.mock_tokenizer,
-                repo_id="invalid_repo_id"  # Missing username/org
+                repo_id="invalid_repo_id",  # Missing username/org
             )
 
         self.assertIn("repo_id must be in format", str(context.exception))
@@ -566,15 +591,17 @@ class TestHubUpload(unittest.TestCase):
             upload_to_hub(
                 model_path="/nonexistent/path",
                 tokenizer=self.mock_tokenizer,
-                repo_id="user/repo"
+                repo_id="user/repo",
             )
 
         self.assertIn("Model path does not exist", str(context.exception))
 
-    @patch('fnsft.sft_trainer.HfApi')
-    @patch('fnsft.sft_trainer.whoami')
-    @patch('fnsft.sft_trainer.AutoPeftModelForCausalLM')
-    def test_successful_upload_with_peft(self, mock_peft_model, mock_whoami, mock_hf_api):
+    @patch("fnsft.sft_trainer.HfApi")
+    @patch("fnsft.sft_trainer.whoami")
+    @patch("fnsft.sft_trainer.AutoPeftModelForCausalLM")
+    def test_successful_upload_with_peft(
+        self, mock_peft_model, mock_whoami, mock_hf_api
+    ):
         """Test successful upload of PEFT model."""
         # Mock HF API
         mock_api = MagicMock()
@@ -595,7 +622,7 @@ class TestHubUpload(unittest.TestCase):
             tokenizer=self.mock_tokenizer,
             repo_id="test_user/test_repo",
             commit_message="Test upload",
-            private=False
+            private=False,
         )
 
         # Verify tokenizer upload was called
@@ -604,8 +631,8 @@ class TestHubUpload(unittest.TestCase):
         # Verify model upload was called
         mock_model.push_to_hub.assert_called_once()
 
-    @patch('fnsft.sft_trainer.HfApi')
-    @patch('fnsft.sft_trainer.whoami')
+    @patch("fnsft.sft_trainer.HfApi")
+    @patch("fnsft.sft_trainer.whoami")
     def test_adapter_only_upload(self, mock_whoami, mock_hf_api):
         """Test upload of only LoRA adapter files."""
         # Mock HF API
@@ -622,7 +649,7 @@ class TestHubUpload(unittest.TestCase):
             model_path=self.model_path,
             tokenizer=self.mock_tokenizer,
             repo_id="test_user/test_repo",
-            push_adapter_only=True
+            push_adapter_only=True,
         )
 
         # Verify tokenizer upload was called
@@ -631,8 +658,8 @@ class TestHubUpload(unittest.TestCase):
         # Verify adapter file upload was called
         mock_api.upload_file.assert_called()
 
-    @patch('fnsft.sft_trainer.HfApi')
-    @patch('fnsft.sft_trainer.whoami')
+    @patch("fnsft.sft_trainer.HfApi")
+    @patch("fnsft.sft_trainer.whoami")
     def test_repository_creation(self, mock_whoami, mock_hf_api):
         """Test automatic repository creation."""
         # Mock HF API
@@ -641,6 +668,7 @@ class TestHubUpload(unittest.TestCase):
 
         # Mock repository not found, then successful creation
         from fnsft.sft_trainer import RepositoryNotFoundError
+
         mock_api.repo_info.side_effect = RepositoryNotFoundError("Not found")
         mock_api.create_repo = MagicMock()
         mock_api.upload_file = MagicMock()
@@ -654,15 +682,12 @@ class TestHubUpload(unittest.TestCase):
             tokenizer=self.mock_tokenizer,
             repo_id="test_user/new_repo",
             private=True,
-            push_adapter_only=True
+            push_adapter_only=True,
         )
 
         # Verify repository creation was called
         mock_api.create_repo.assert_called_once_with(
-            repo_id="test_user/new_repo",
-            repo_type="model",
-            private=True,
-            exist_ok=True
+            repo_id="test_user/new_repo", repo_type="model", private=True, exist_ok=True
         )
 
 

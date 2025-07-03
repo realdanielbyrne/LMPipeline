@@ -30,6 +30,12 @@ from peft import (
 )
 
 from .base import BaseStage, StageConfig, StageResult
+from ..utils.model_utils import (
+    load_quantization_config,
+    setup_lora,
+    load_dataset_from_path,
+    split_dataset,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,10 +174,19 @@ class SFTStage(BaseStage):
 
         # Apply quantization if needed
         if self.config.use_4bit or self.config.use_8bit:
-            model = self._apply_quantization(model)
+            # Note: Quantization is typically applied during model loading
+            # This is kept for compatibility but may not be needed
+            pass
 
         # Setup LoRA
-        model = self._setup_lora(model)
+        model = setup_lora(
+            model=model,
+            lora_r=self.config.lora_r,
+            lora_alpha=self.config.lora_alpha,
+            lora_dropout=self.config.lora_dropout,
+            lora_target_modules=self.config.lora_target_modules,
+            lora_bias=self.config.lora_bias,
+        )
 
         return model, tokenizer
 
@@ -187,8 +202,11 @@ class SFTStage(BaseStage):
             self.setup_logging()
 
             # Load and prepare dataset
-            data = self._load_dataset()
-            train_data, val_data = self._split_dataset(data)
+            data = load_dataset_from_path(
+                dataset_name_or_path=self.config.dataset_name_or_path,
+                dataset_config_name=self.config.dataset_config_name,
+            )
+            train_data, val_data = split_dataset(data, self.config.validation_split)
 
             # Create datasets
             train_dataset = self._create_instruction_dataset(train_data, tokenizer)
@@ -254,125 +272,7 @@ class SFTStage(BaseStage):
                 error_message=str(e),
             )
 
-    def _apply_quantization(self, model: Any) -> Any:
-        """Apply quantization to the model."""
-        if self.config.use_8bit:
-            self.logger.info("Using 8-bit quantization")
-            quant_config = BitsAndBytesConfig(load_in_8bit=True)
-        elif self.config.use_4bit:
-            self.logger.info("Using 4-bit quantization")
-            compute_dtype = getattr(torch, self.config.bnb_4bit_compute_dtype)
-            quant_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=compute_dtype,
-                bnb_4bit_quant_type=self.config.bnb_4bit_quant_type,
-                bnb_4bit_use_double_quant=self.config.bnb_4bit_use_double_quant,
-            )
-        else:
-            return model
-
-        return model
-
-    def _setup_lora(self, model: Any) -> Any:
-        """Setup LoRA configuration for the model."""
-        self.logger.info("Setting up LoRA configuration")
-
-        # Prepare model for k-bit training
-        model = prepare_model_for_kbit_training(model)
-
-        # Auto-detect target modules if not specified
-        target_modules = self.config.lora_target_modules
-        if target_modules is None:
-            # Common target modules for different architectures
-            if hasattr(model, "config") and hasattr(model.config, "model_type"):
-                model_type = model.config.model_type.lower()  # type: ignore[attr-defined]
-                if "llama" in model_type or "mistral" in model_type:
-                    target_modules = [
-                        "q_proj",
-                        "k_proj",
-                        "v_proj",
-                        "o_proj",
-                        "gate_proj",
-                        "up_proj",
-                        "down_proj",
-                    ]
-                elif "gpt" in model_type:
-                    target_modules = ["c_attn", "c_proj", "c_fc"]
-                else:
-                    target_modules = []
-                    if hasattr(model, "named_modules"):
-                        for name, module in model.named_modules():  # type: ignore[attr-defined]
-                            if isinstance(module, nn.Linear):
-                                target_modules.append(name.split(".")[-1])
-                        target_modules = list(set(target_modules))
-
-            self.logger.info(f"Auto-detected target modules: {target_modules}")
-
-        # Configure LoRA
-        lora_config = LoraConfig(
-            r=self.config.lora_r,
-            lora_alpha=self.config.lora_alpha,
-            target_modules=target_modules,
-            lora_dropout=self.config.lora_dropout,
-            bias=self.config.lora_bias,  # type: ignore[arg-type]
-            task_type=TaskType.CAUSAL_LM,
-        )
-
-        # Apply LoRA to model
-        model = get_peft_model(model, lora_config)
-        if hasattr(model, "print_trainable_parameters"):
-            model.print_trainable_parameters()  # type: ignore[attr-defined]
-
-        return model
-
-    def _load_dataset(self) -> List[Dict[str, Any]]:
-        """Load dataset from local file or HuggingFace hub."""
-        dataset_path = self.config.dataset_name_or_path
-
-        if os.path.isfile(dataset_path):
-            self.logger.info(f"Loading dataset from local file: {dataset_path}")
-
-            # Load from local file
-            if dataset_path.endswith(".json"):
-                with open(dataset_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            elif dataset_path.endswith(".jsonl"):
-                data = []
-                with open(dataset_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        data.append(json.loads(line.strip()))
-            else:
-                raise ValueError(f"Unsupported file format: {dataset_path}")
-        else:
-            self.logger.info(f"Loading dataset from HuggingFace hub: {dataset_path}")
-
-            # Load from HuggingFace hub
-            dataset = load_dataset(
-                dataset_path, self.config.dataset_config_name, split="train"
-            )
-            data = [item for item in dataset]
-
-        self.logger.info(f"Loaded {len(data)} examples")
-        # Ensure type
-        if not isinstance(data, list):
-            raise ValueError("Loaded data is not a list")
-        return data  # type: ignore[return-value]
-
-    def _split_dataset(
-        self, data: List[Dict[str, Any]]
-    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Split dataset into train and validation sets."""
-        if self.config.validation_split <= 0:
-            return data, []
-
-        split_idx = int(len(data) * (1 - self.config.validation_split))
-        train_data = data[:split_idx]
-        val_data = data[split_idx:]
-
-        self.logger.info(
-            f"Split dataset: {len(train_data)} train, {len(val_data)} validation"
-        )
-        return train_data, val_data
+    # Removed duplicate methods - now using shared utilities from utils.model_utils
 
     def _create_instruction_dataset(
         self, data: List[Dict[str, Any]], tokenizer: Any
