@@ -110,7 +110,7 @@ def run_training_experiment():
     # Step 2: Run training
     print("Step 2: Starting training...")
     training_cmd = [
-        sys.executable, "-m", "fnsft.sft_trainer",
+        sys.executable, "-m", "lmpipeline.sft_trainer",
         "--model_name_or_path", model_name,
         "--dataset_name_or_path", dataset_path,
         "--output_dir", output_dir,
@@ -210,7 +210,7 @@ def show_usage_examples():
             "name": "Basic Training",
             "description": "Simple training with default settings",
             "command": [
-                "python", "-m", "fnsft.sft_trainer",
+                "python", "-m", "lmpipeline.sft_trainer",
                 "--model_name_or_path", "microsoft/DialoGPT-small",
                 "--dataset_name_or_path", "tatsu-lab/alpaca",
                 "--output_dir", "./outputs/basic_training",
@@ -221,7 +221,7 @@ def show_usage_examples():
             "name": "Advanced LoRA Training",
             "description": "Training with custom LoRA configuration",
             "command": [
-                "python", "-m", "fnsft.sft_trainer",
+                "python", "-m", "lmpipeline.sft_trainer",
                 "--model_name_or_path", "meta-llama/Llama-2-7b-hf",
                 "--dataset_name_or_path", "./data/custom_data.jsonl",
                 "--output_dir", "./outputs/llama_lora",
@@ -237,7 +237,7 @@ def show_usage_examples():
             "name": "Configuration File",
             "description": "Using YAML configuration file",
             "command": [
-                "python", "-m", "fnsft.sft_trainer",
+                "python", "-m", "lmpipeline.sft_trainer",
                 "--config", "configs/llama_7b_config.yaml"
             ]
         },
@@ -245,7 +245,7 @@ def show_usage_examples():
             "name": "With W&B Logging",
             "description": "Training with Weights & Biases logging",
             "command": [
-                "python", "-m", "fnsft.sft_trainer",
+                "python", "-m", "lmpipeline.sft_trainer",
                 "--model_name_or_path", "mistralai/Mistral-7B-v0.1",
                 "--dataset_name_or_path", "OpenAssistant/oasst1",
                 "--output_dir", "./outputs/mistral_wandb",

@@ -64,7 +64,7 @@ stage_configs:
     
     # Logging
     use_wandb: false
-    wandb_project: "fnsft-pipeline"
+    wandb_project: "lmpipeline"
     
   dpo:
     # Dataset configuration
@@ -85,7 +85,7 @@ stage_configs:
     
     # Logging
     use_wandb: false
-    wandb_project: "fnsft-pipeline"
+    wandb_project: "lmpipeline"
     
   rlaif:
     # Dataset configuration
@@ -115,7 +115,7 @@ stage_configs:
     
     # Logging
     use_wandb: false
-    wandb_project: "fnsft-pipeline"
+    wandb_project: "lmpipeline"
     
   rl:
     # Dataset configuration
@@ -159,7 +159,7 @@ stage_configs:
     
     # Logging
     use_wandb: false
-    wandb_project: "fnsft-pipeline"
+    wandb_project: "lmpipeline"
     
   cot_distillation:
     # Dataset configuration
@@ -206,4 +206,4 @@ stage_configs:
     
     # Logging
     use_wandb: false
-    wandb_project: "fnsft-pipeline"
+    wandb_project: "lmpipeline"

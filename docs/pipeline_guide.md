@@ -1,6 +1,6 @@
 # Modular Fine-Tuning Pipeline Guide
 
-The FNSFT package now supports a modular pipeline architecture that allows you to chain multiple fine-tuning algorithms in a configurable sequence. This enables you to build sophisticated training workflows that combine different approaches like SFT, DPO, RLAIF, RL, and Chain-of-Thought distillation.
+The lm-pipeline package now supports a modular pipeline architecture that allows you to chain multiple fine-tuning algorithms in a configurable sequence. This enables you to build sophisticated training workflows that combine different approaches like SFT, DPO, RLAIF, RL, and Chain-of-Thought distillation.
 
 ## Overview
 
@@ -64,21 +64,21 @@ The pipeline system consists of:
 
 ```bash
 # Using the new pipeline system for SFT only
-fnsft-pipeline --config configs/sft_only_config.yaml
+lmpipeline-pipeline --config configs/sft_only_config.yaml
 ```
 
 ### 2. Multi-Stage Pipeline
 
 ```bash
 # Run a complete multi-stage pipeline
-fnsft-pipeline --config configs/pipeline_config.yaml
+lmpipeline-pipeline --config configs/pipeline_config.yaml
 ```
 
 ### 3. Custom Algorithm Selection
 
 ```bash
 # Run only specific algorithms
-fnsft-pipeline --config configs/pipeline_config.yaml --stages sft dpo
+lmpipeline-pipeline --config configs/pipeline_config.yaml --stages sft dpo
 ```
 
 ## Configuration
@@ -170,41 +170,41 @@ stage_configs:
 ### Basic Usage
 
 ```bash
-fnsft-pipeline --config path/to/config.yaml
+lm-pipeline-pipeline --config path/to/config.yaml
 ```
 
 ### Override Options
 
 ```bash
 # Override model
-fnsft-pipeline --config config.yaml --model_name_or_path "different/model"
+lm-pipeline-pipeline --config config.yaml --model_name_or_path "different/model"
 
 # Override output directory
-fnsft-pipeline --config config.yaml --output_dir "./custom_output"
+lm-pipeline-pipeline --config config.yaml --output_dir "./custom_output"
 
 # Run specific stages
-fnsft-pipeline --config config.yaml --stages sft dpo
+lm-pipeline-pipeline --config config.yaml --stages sft dpo
 
 # Dry run (validate config without executing)
-fnsft-pipeline --config config.yaml --dry_run
+lm-pipeline-pipeline --config config.yaml --dry_run
 ```
 
 ### Logging Options
 
 ```bash
 # Set log level
-fnsft-pipeline --config config.yaml --log_level DEBUG
+lm-pipeline-pipeline --config config.yaml --log_level DEBUG
 
 # Save final model
-fnsft-pipeline --config config.yaml --save_final_model
+lm-pipeline-pipeline --config config.yaml --save_final_model
 
 # Cleanup intermediate models
-fnsft-pipeline --config config.yaml --cleanup_intermediate
+lm-pipeline-pipeline --config config.yaml --cleanup_intermediate
 ```
 
 ## Adding New Algorithms
 
-The FNSFT pipeline is designed to be highly extensible, allowing you to add custom training algorithms that integrate seamlessly with the existing pipeline infrastructure. This section provides a comprehensive guide for implementing and integrating new algorithms.
+The lm-pipeline pipeline is designed to be highly extensible, allowing you to add custom training algorithms that integrate seamlessly with the existing pipeline infrastructure. This section provides a comprehensive guide for implementing and integrating new algorithms.
 
 ### Algorithm Extension Architecture
 
@@ -225,7 +225,7 @@ First, define a configuration class that inherits from `StageConfig`:
 ```python
 from dataclasses import dataclass, field
 from typing import Optional
-from fnsft.algorithms.base import StageConfig
+from lm-pipeline.algorithms.base import StageConfig
 
 @dataclass
 class MyAlgorithmConfig(StageConfig):
@@ -260,7 +260,7 @@ Create the main algorithm class that inherits from `BaseStage`:
 import logging
 from typing import Optional
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from fnsft.algorithms.base import BaseStage, StageResult
+from lm-pipeline.algorithms.base import BaseStage, StageResult
 
 logger = logging.getLogger(__name__)
 
@@ -360,7 +360,7 @@ class MyAlgorithm(BaseStage):
 Register your algorithm with the pipeline:
 
 ```python
-from fnsft.pipeline import Pipeline
+from lm-pipeline.pipeline import Pipeline
 
 # Register the algorithm
 Pipeline.register_stage("my_algorithm", MyAlgorithm)
@@ -371,13 +371,13 @@ Pipeline.register_stage("my_algorithm", MyAlgorithm)
 Save your algorithm in the algorithms directory:
 
 ```
-src/fnsft/algorithms/my_algorithm.py
+src/lm-pipeline/algorithms/my_algorithm.py
 ```
 
 And update the algorithms `__init__.py`:
 
 ```python
-# In src/fnsft/algorithms/__init__.py
+# In src/lm-pipeline/algorithms/__init__.py
 from .my_algorithm import MyAlgorithm, MyAlgorithmConfig
 
 __all__ = [
@@ -434,7 +434,7 @@ def prepare_model_and_tokenizer(self, model, tokenizer, previous_result=None):
 Integrate with the existing dataset utilities:
 
 ```python
-from fnsft.utils.model_utils import load_dataset_from_path, split_dataset
+from lm-pipeline.utils.model_utils import load_dataset_from_path, split_dataset
 
 def _load_and_prepare_data(self):
     """Load and prepare dataset for training."""
@@ -455,7 +455,7 @@ Create comprehensive tests for your algorithm:
 import unittest
 import tempfile
 from pathlib import Path
-from src.fnsft.algorithms.my_algorithm import MyAlgorithm, MyAlgorithmConfig
+from src.lm-pipeline.algorithms.my_algorithm import MyAlgorithm, MyAlgorithmConfig
 
 class TestMyAlgorithm(unittest.TestCase):
     def setUp(self):
@@ -510,7 +510,7 @@ class TestMyAlgorithm(unittest.TestCase):
 #### 4. Integration Consistency
 
 - Follow existing naming conventions
-- Use shared utilities from `fnsft.utils`
+- Use shared utilities from `lm-pipeline.utils`
 - Maintain compatibility with pipeline orchestration
 
 #### 5. Documentation
@@ -524,7 +524,7 @@ class TestMyAlgorithm(unittest.TestCase):
 Here's a complete minimal example:
 
 ```python
-# src/fnsft/algorithms/simple_example.py
+# src/lm-pipeline/algorithms/simple_example.py
 from dataclasses import dataclass, field
 from typing import Optional
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -571,13 +571,13 @@ The new pipeline system is backward compatible. You can:
 1. **Continue using the old interface**:
 
 ```bash
-fnsft-train --model_name_or_path "model" --dataset_name_or_path "data.jsonl"
+lmpipeline-train --model_name_or_path "model" --dataset_name_or_path "data.jsonl"
 ```
 
 2. **Migrate to pipeline with SFT-only config**:
 
 ```bash
-fnsft-pipeline --config configs/sft_only_config.yaml
+lmpipeline-pipeline --config configs/sft_only_config.yaml
 ```
 
 3. **Gradually add more stages**:

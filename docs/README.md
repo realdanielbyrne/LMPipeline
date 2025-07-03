@@ -31,7 +31,7 @@ poetry install
 
 ```bash
 git clone <repository-url>
-cd fnsft
+cd LMPipeline
 pip install -e .
 ```
 
@@ -40,7 +40,7 @@ pip install -e .
 ### Basic Usage
 
 ```bash
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --model_name_or_path microsoft/DialoGPT-small \
     --dataset_name_or_path tatsu-lab/alpaca \
     --output_dir ./outputs/my_model \
@@ -52,7 +52,7 @@ python -m fnsft.sft_trainer \
 ### Advanced Usage with LoRA
 
 ```bash
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --model_name_or_path meta-llama/Llama-2-7b-hf \
     --dataset_name_or_path ./data/instructions.jsonl \
     --output_dir ./outputs/llama_sft \
@@ -129,6 +129,7 @@ python -m fnsft.sft_trainer \
 The script supports two data formats:
 
 #### Instruction-Response Format
+
 ```json
 {
     "instruction": "What is the capital of France?",
@@ -137,6 +138,7 @@ The script supports two data formats:
 ```
 
 #### Text Format
+
 ```json
 {
     "text": "### Instruction:\nWhat is the capital of France?\n\n### Response:\nThe capital of France is Paris."

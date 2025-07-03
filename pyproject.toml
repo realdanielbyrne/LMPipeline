@@ -1,7 +1,7 @@
 [project]
 name = "lmpipeline"
 version = "0.1.0"
-description = ""
+description = "LMPipeline is a production-ready Python framework for fine-tuning language models with a focus on modular pipeline architecture and parameter-efficient training."
 authors = [
     {name = "Daniel Byrne",email = "realdanielbyrne@icloud.com"}
 ]
@@ -32,8 +32,8 @@ quantization = [
 ]
 
 [project.scripts]
-fnsft-train = "fnsft.sft_trainer:main"
-fnsft-pipeline = "fnsft.pipeline_main:main"
+lmpipeline-train = "lmpipeline.sft_trainer:main"
+lmpipeline-pipeline = "lmpipeline.pipeline_main:main"
 
 [tool.poetry]
 packages = [{include = "lmpipeline", from = "src"}]

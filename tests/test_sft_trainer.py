@@ -596,9 +596,9 @@ class TestHubUpload(unittest.TestCase):
 
         self.assertIn("Model path does not exist", str(context.exception))
 
-    @patch("fnsft.sft_trainer.HfApi")
-    @patch("fnsft.sft_trainer.whoami")
-    @patch("fnsft.sft_trainer.AutoPeftModelForCausalLM")
+    @patch("lmpipeline.sft_trainer.HfApi")
+    @patch("lmpipeline.sft_trainer.whoami")
+    @patch("lmpipeline.sft_trainer.AutoPeftModelForCausalLM")
     def test_successful_upload_with_peft(
         self, mock_peft_model, mock_whoami, mock_hf_api
     ):
@@ -631,8 +631,8 @@ class TestHubUpload(unittest.TestCase):
         # Verify model upload was called
         mock_model.push_to_hub.assert_called_once()
 
-    @patch("fnsft.sft_trainer.HfApi")
-    @patch("fnsft.sft_trainer.whoami")
+    @patch("lmpipeline.sft_trainer.HfApi")
+    @patch("lmpipeline.sft_trainer.whoami")
     def test_adapter_only_upload(self, mock_whoami, mock_hf_api):
         """Test upload of only LoRA adapter files."""
         # Mock HF API
@@ -658,8 +658,8 @@ class TestHubUpload(unittest.TestCase):
         # Verify adapter file upload was called
         mock_api.upload_file.assert_called()
 
-    @patch("fnsft.sft_trainer.HfApi")
-    @patch("fnsft.sft_trainer.whoami")
+    @patch("lmpipeline.sft_trainer.HfApi")
+    @patch("lmpipeline.sft_trainer.whoami")
     def test_repository_creation(self, mock_whoami, mock_hf_api):
         """Test automatic repository creation."""
         # Mock HF API

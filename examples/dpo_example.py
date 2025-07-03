@@ -23,7 +23,7 @@ def create_sample_preference_dataset():
         {
             "prompt": "What is artificial intelligence?",
             "chosen": "Artificial intelligence (AI) is a branch of computer science that aims to create machines capable of performing tasks that typically require human intelligence, such as learning, reasoning, and problem-solving.",
-            "rejected": "AI is just computers doing stuff.",
+            "rejected": "AI is just computers doing human stuff.",
         },
         {
             "prompt": "Explain machine learning in simple terms.",
@@ -37,7 +37,7 @@ def create_sample_preference_dataset():
         },
         {
             "question": "How does photosynthesis work?",
-            "good_answer": "Photosynthesis is the process by which plants convert sunlight, carbon dioxide, and water into glucose and oxygen using chlorophyll in their leaves.",
+            "good_answer": "Photosynthesis is a process by which plants, algae, and certain microorganisms transform light energy from the sun into the chemical energy of food. During photosynthesis, energy from sunlight is harnessed and used to convert carbon dioxide and water into organic compounds—namely sugar molecules—and oxygen.",
             "bad_answer": "Plants eat sunlight.",
         },
     ]

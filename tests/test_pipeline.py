@@ -108,8 +108,8 @@ class TestPipeline(unittest.TestCase):
         self.assertIn("mock", Pipeline.STAGE_REGISTRY)
         self.assertEqual(Pipeline.STAGE_REGISTRY["mock"], MockStage)
 
-    @patch("fnsft.pipeline.AutoModelForCausalLM")
-    @patch("fnsft.pipeline.AutoTokenizer")
+    @patch("lmpipeline.pipeline.AutoModelForCausalLM")
+    @patch("lmpipeline.pipeline.AutoTokenizer")
     def test_pipeline_initialization(self, mock_tokenizer, mock_model):
         """Test pipeline initialization."""
         # Register mock stage
@@ -121,8 +121,8 @@ class TestPipeline(unittest.TestCase):
         self.assertIsInstance(pipeline.stages[0], MockStage)
         self.assertEqual(pipeline.stages[0].stage_name, "mock")
 
-    @patch("fnsft.pipeline.AutoModelForCausalLM")
-    @patch("fnsft.pipeline.AutoTokenizer")
+    @patch("lmpipeline.pipeline.AutoModelForCausalLM")
+    @patch("lmpipeline.pipeline.AutoTokenizer")
     def test_pipeline_execution(self, mock_tokenizer_class, mock_model_class):
         """Test pipeline execution."""
         # Register mock stage

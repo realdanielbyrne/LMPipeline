@@ -31,7 +31,7 @@ A production-ready Python framework for supervised fine-tuning of functional net
 
 ```bash
 git clone <repository-url>
-cd fnsft
+cd LMPipeline
 
 # Create and activate virtual environment
 python -m venv venv
@@ -65,7 +65,7 @@ poetry shell
 ### Basic Training
 
 ```bash
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --model_name_or_path microsoft/DialoGPT-small \
     --dataset_name_or_path tatsu-lab/alpaca \
     --output_dir ./outputs/my_model \
@@ -77,7 +77,7 @@ python -m fnsft.sft_trainer \
 ### Advanced Training with LoRA
 
 ```bash
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --model_name_or_path meta-llama/Llama-2-7b-hf \
     --dataset_name_or_path ./examples/sample_data.jsonl \
     --output_dir ./outputs/llama_sft \
@@ -100,20 +100,20 @@ python -m fnsft.sft_trainer \
 
 ```bash
 # Use the new pipeline system for SFT training
-fnsft-pipeline --config configs/sft_only_config.yaml
+lmpipeline-pipeline --config configs/sft_only_config.yaml
 ```
 
 #### Multi-Algorithm Pipeline
 
 ```bash
 # Run a complete SFT → DPO → RLAIF pipeline
-fnsft-pipeline --config configs/pipeline_config.yaml
+lmpipeline-pipeline --config configs/pipeline_config.yaml
 
 # Run specific algorithms only
-fnsft-pipeline --config configs/pipeline_config.yaml --stages sft dpo
+lmpipeline-pipeline --config configs/pipeline_config.yaml --stages sft dpo
 
 # Dry run to validate configuration
-fnsft-pipeline --config configs/pipeline_config.yaml --dry_run
+lmpipeline-pipeline --config configs/pipeline_config.yaml --dry_run
 ```
 
 #### Pipeline Configuration Example
@@ -147,9 +147,8 @@ stage_configs:
 ### Using Configuration Files (Stand alone SFT)
 
 ```bash
-python -m fnsft.sft_trainer --config configs/llama_7b_config.yaml
+python -m lmpipeline.sft_trainer --config configs/llama_7b_config.yaml
 ```
-
 
 ## 🎯 Supported Models
 
@@ -228,12 +227,12 @@ The system automatically detects your dataset format and converts it to a standa
 
 ```bash
 # Auto-detection is enabled by default
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --dataset_name_or_path your_dataset.jsonl \
     --model_name_or_path your_model
 
 # Disable auto-detection if needed
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --dataset_name_or_path your_dataset.jsonl \
     --model_name_or_path your_model \
     --no_auto_detect_format
@@ -279,7 +278,7 @@ huggingface-cli login
 ### Upload Full Model
 
 ```bash
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --model_name_or_path microsoft/DialoGPT-small \
     --dataset_name_or_path tatsu-lab/alpaca \
     --output_dir ./outputs/my_model \
@@ -292,7 +291,7 @@ python -m fnsft.sft_trainer \
 ### Upload LoRA Adapters Only
 
 ```bash
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --model_name_or_path meta-llama/Llama-2-7b-hf \
     --dataset_name_or_path tatsu-lab/alpaca \
     --output_dir ./outputs/llama_lora \

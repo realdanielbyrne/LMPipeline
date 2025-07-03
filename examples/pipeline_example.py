@@ -39,7 +39,7 @@ def create_sample_config():
                 }
             },
             save_final_model=True,
-            log_level="INFO"
+            log_level="INFO",
         )
         return config
 
@@ -48,33 +48,33 @@ def demo_pipeline_creation():
     """Demonstrate pipeline creation and validation."""
     print("🔧 Creating pipeline configuration...")
     config = create_sample_config()
-    
+
     print("✅ Configuration created successfully!")
     print(f"   Model: {config.model_name_or_path}")
     print(f"   Stages: {' → '.join(config.stages)}")
     print(f"   Output: {config.output_dir}")
-    
+
     print("\n🔧 Initializing pipeline...")
     pipeline = Pipeline(config)
-    
+
     print("✅ Pipeline initialized successfully!")
     print(f"   Available stages: {list(Pipeline.STAGE_REGISTRY.keys())}")
     print(f"   Configured stages: {len(pipeline.stages)}")
-    
+
     # Show pipeline plan
     print("\n📋 Pipeline Execution Plan:")
     for i, stage in enumerate(pipeline.stages, 1):
         print(f"   {i}. {stage.stage_name.upper()}")
         print(f"      Dataset: {stage.config.dataset_name_or_path}")
         print(f"      Output: {stage.config.output_dir}")
-    
+
     return pipeline
 
 
 def demo_multi_stage_config():
     """Demonstrate multi-stage pipeline configuration."""
     print("\n🔗 Multi-Stage Pipeline Configuration Example:")
-    
+
     multi_config = PipelineConfig(
         model_name_or_path="microsoft/DialoGPT-medium",
         output_dir="./outputs/multi_stage_pipeline",
@@ -94,10 +94,10 @@ def demo_multi_stage_config():
                 "reasoning_dataset_path": "reasoning_data.jsonl",
                 "teacher_model_path": "gpt-4",
                 "teacher_model_type": "api",
-            }
-        }
+            },
+        },
     )
-    
+
     print(f"   Stages: {' → '.join(multi_config.stages)}")
     print("   Stage configurations:")
     for stage_name in multi_config.stages:
@@ -112,12 +112,12 @@ def demo_multi_stage_config():
 def demo_stage_extensibility():
     """Demonstrate how to extend the pipeline with custom stages."""
     print("\n🛠️  Stage Extensibility Example:")
-    
+
     # Show how stages are registered
     print("   Built-in stages:")
     for stage_name in Pipeline.STAGE_REGISTRY.keys():
         print(f"     - {stage_name}")
-    
+
     print("\n   To add a custom stage:")
     print("   1. Create a class inheriting from BaseStage")
     print("   2. Implement required methods (stage_name, validate_config, execute)")
@@ -127,28 +127,29 @@ def demo_stage_extensibility():
 
 def main():
     """Main demonstration function."""
-    print("🚀 FNSFT Modular Pipeline Demonstration")
+    print("🚀 LMPipeline Modular Pipeline Demonstration")
     print("=" * 50)
-    
+
     try:
         # Demo 1: Basic pipeline creation
         pipeline = demo_pipeline_creation()
-        
+
         # Demo 2: Multi-stage configuration
         demo_multi_stage_config()
-        
+
         # Demo 3: Extensibility
         demo_stage_extensibility()
-        
+
         print("\n✅ Pipeline demonstration completed successfully!")
         print("\nNext steps:")
         print("1. Create your own configuration YAML file")
-        print("2. Run: fnsft-pipeline --config your_config.yaml")
-        print("3. Or use: fnsft-pipeline --config configs/sft_only_config.yaml")
-        
+        print("2. Run: lmpipeline-pipeline --config your_config.yaml")
+        print("3. Or use: lmpipeline-pipeline --config configs/sft_only_config.yaml")
+
     except Exception as e:
         print(f"\n❌ Demo failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

@@ -1,6 +1,6 @@
 # Automatic Dataset Format Detection and Conversion
 
-The FNSFT library now includes automatic dataset format detection and conversion capabilities, making it easier to work with datasets from different sources without manual preprocessing.
+The LM Pipeline library now includes automatic dataset format detection and conversion capabilities, making it easier to work with datasets from different sources without manual preprocessing.
 
 ## Overview
 
@@ -9,6 +9,7 @@ The enhanced `InstructionDataset` class can automatically detect and convert var
 ## Supported Dataset Formats
 
 ### 1. Alpaca Format (Instruction + Input + Output)
+
 ```json
 {
     "instruction": "What is the capital of France?",
@@ -18,6 +19,7 @@ The enhanced `InstructionDataset` class can automatically detect and convert var
 ```
 
 When `input` is provided, it's combined with the instruction:
+
 ```json
 {
     "instruction": "Translate the following text",
@@ -27,6 +29,7 @@ When `input` is provided, it's combined with the instruction:
 ```
 
 ### 2. Prompt-Completion Format
+
 ```json
 {
     "prompt": "What is the capital of France?",
@@ -35,6 +38,7 @@ When `input` is provided, it's combined with the instruction:
 ```
 
 ### 3. Question-Answer Format
+
 ```json
 {
     "question": "What is the capital of France?",
@@ -43,6 +47,7 @@ When `input` is provided, it's combined with the instruction:
 ```
 
 ### 4. Conversational Format
+
 ```json
 {
     "messages": [
@@ -53,6 +58,7 @@ When `input` is provided, it's combined with the instruction:
 ```
 
 Multi-turn conversations are also supported:
+
 ```json
 {
     "messages": [
@@ -65,6 +71,7 @@ Multi-turn conversations are also supported:
 ```
 
 ### 5. Context-Question-Answer Format
+
 ```json
 {
     "context": "Paris is the capital and largest city of France.",
@@ -74,6 +81,7 @@ Multi-turn conversations are also supported:
 ```
 
 ### 6. Text Format (Pre-formatted)
+
 ```json
 {
     "text": "### Instruction:\nWhat is the capital of France?\n\n### Response:\nParis"
@@ -83,6 +91,7 @@ Multi-turn conversations are also supported:
 ## How It Works
 
 ### Automatic Detection
+
 The system examines the first few samples of your dataset to identify common column patterns:
 
 1. **Priority-based Detection**: Formats are detected in order of preference
@@ -90,6 +99,7 @@ The system examines the first few samples of your dataset to identify common col
 3. **Fallback Logic**: Handles unknown formats gracefully
 
 ### Conversion Process
+
 Once a format is detected, the system converts it to a standardized instruction-response format:
 
 - **Instruction**: The prompt, question, or instruction text
@@ -98,8 +108,9 @@ Once a format is detected, the system converts it to a standardized instruction-
 ## Usage
 
 ### Basic Usage
+
 ```python
-from fnsft.sft_trainer import InstructionDataset
+from lmpipeline.sft_trainer import InstructionDataset
 from transformers import AutoTokenizer
 
 # Load your data (any supported format)
@@ -119,6 +130,7 @@ dataset = InstructionDataset(
 ```
 
 ### Disabling Auto-Detection
+
 ```python
 # Use legacy behavior (manual format specification)
 dataset = InstructionDataset(
@@ -129,14 +141,15 @@ dataset = InstructionDataset(
 ```
 
 ### Command Line Usage
+
 ```bash
 # Auto-detection is enabled by default
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --dataset_name_or_path your_dataset.jsonl \
     --model_name_or_path your_model
 
 # Explicitly disable auto-detection
-python -m fnsft.sft_trainer \
+python -m lmpipeline.sft_trainer \
     --dataset_name_or_path your_dataset.jsonl \
     --model_name_or_path your_model \
     --no_auto_detect_format
@@ -145,6 +158,7 @@ python -m fnsft.sft_trainer \
 ## Configuration Options
 
 ### DataArguments
+
 ```python
 @dataclass
 class DataArguments:
@@ -153,6 +167,7 @@ class DataArguments:
 ```
 
 ### Command Line Arguments
+
 - `--auto_detect_format`: Enable auto-detection (default: True)
 - `--no_auto_detect_format`: Disable auto-detection
 - `--instruction_template`: Custom template for formatting
@@ -160,6 +175,7 @@ class DataArguments:
 ## Examples
 
 ### Example 1: Mixed Format Dataset
+
 ```python
 # Your dataset can have mixed formats - the system will detect the most common one
 data = [
@@ -173,6 +189,7 @@ dataset = InstructionDataset(data, tokenizer)
 ```
 
 ### Example 2: Conversational Data
+
 ```python
 data = [
     {
@@ -201,11 +218,13 @@ INFO - Sample conversion: {'instruction': 'What is AI?', 'input': '', 'output': 
 ## Error Handling
 
 ### Graceful Fallbacks
+
 - **Unknown Formats**: Attempts to infer instruction/response fields
 - **Conversion Errors**: Falls back to original format processing
 - **Empty Datasets**: Handles gracefully without errors
 
 ### Warning Messages
+
 ```
 WARNING - Unknown dataset format detected. Available keys: ('custom_field',)
 WARNING - Failed to convert item 5: Invalid format. Using original format.
@@ -221,6 +240,7 @@ WARNING - Failed to convert item 5: Invalid format. Using original format.
 ## Migration from Legacy Code
 
 ### Before (Manual Format Handling)
+
 ```python
 # Had to manually ensure data was in instruction-response format
 data = []
@@ -234,6 +254,7 @@ for item in raw_data:
 ```
 
 ### After (Automatic Detection)
+
 ```python
 # Just load your data - format detection handles the rest
 dataset = InstructionDataset(raw_data, tokenizer)
@@ -242,6 +263,7 @@ dataset = InstructionDataset(raw_data, tokenizer)
 ## Testing
 
 Run the test suite to verify functionality:
+
 ```bash
 python -m pytest tests/test_sft_trainer.py::TestDatasetFormatter -v
 python examples/test_dataset_formats.py

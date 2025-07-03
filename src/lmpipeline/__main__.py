@@ -3,8 +3,8 @@
 Entry point for running the SFT trainer as a module.
 
 Usage:
-    python -m fnsft.sft_trainer [arguments]
-    python -m fnsft [arguments]  # This file enables this shortcut
+    python -m lmpipeline.sft_trainer [arguments]
+    python -m lmpipeline [arguments]  # This file enables this shortcut
 """
 
 from .sft_trainer import main

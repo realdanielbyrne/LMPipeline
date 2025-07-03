@@ -2,14 +2,14 @@
 
 [[package]]
 name = "absl-py"
-version = "2.3.0"
+version = "2.3.1"
 description = "Abseil Python Common Libraries, see https://github.com/abseil/abseil-py."
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "absl_py-2.3.0-py3-none-any.whl", hash = "sha256:9824a48b654a306168f63e0d97714665f8490b8d89ec7bf2efc24bf67cf579b3"},
-    {file = "absl_py-2.3.0.tar.gz", hash = "sha256:d96fda5c884f1b22178852f30ffa85766d50b99e00775ea626c23304f582fc4f"},
+    {file = "absl_py-2.3.1-py3-none-any.whl", hash = "sha256:eeecf07f0c2a93ace0772c92e596ace6d3d3996c042b2128459aaae2a76de11d"},
+    {file = "absl_py-2.3.1.tar.gz", hash = "sha256:a97820526f7fbfd2ec1bce83f3f25e3a14840dac0d8e02a0b71cd75db3f77fc9"},
 ]
 
 [[package]]
@@ -228,16 +228,16 @@ tests-mypy = ["mypy (>=1.11.1) ; platform_python_implementation == \"CPython\" a
 
 [[package]]
 name = "bitsandbytes"
-version = "0.46.0"
+version = "0.46.1"
 description = "k-bit optimizers and matrix multiplication routines."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "platform_machine != \"arm64\" and extra == \"quantization\""
 files = [
-    {file = "bitsandbytes-0.46.0-py3-none-manylinux_2_24_aarch64.whl", hash = "sha256:010709b56c85b0355f47fefbb37fe9058e8b18b9bf275bd576c5bd95a0d14d0c"},
-    {file = "bitsandbytes-0.46.0-py3-none-manylinux_2_24_x86_64.whl", hash = "sha256:ef38883cfd26f36a0dfff1715f620f87cee3813431f33e10e9658205160cb89b"},
-    {file = "bitsandbytes-0.46.0-py3-none-win_amd64.whl", hash = "sha256:121820a6df80ae3b7e361f7ef193279c3204c361a7e21eb43b5ffa7293403979"},
+    {file = "bitsandbytes-0.46.1-py3-none-manylinux_2_24_aarch64.whl", hash = "sha256:21b349f776d04c6c1380405961081de29c84f49640b79d3d199b6d719818da84"},
+    {file = "bitsandbytes-0.46.1-py3-none-manylinux_2_24_x86_64.whl", hash = "sha256:b0ee4a204fb926d4eae02bc2f5468ae3c11c011cfa849a4c771d4c6b201f57ae"},
+    {file = "bitsandbytes-0.46.1-py3-none-win_amd64.whl", hash = "sha256:9f6f61376bd0e9780c5dc4ddee7d1f52cb10fe8034a1ea588611f4e8b87eb6a7"},
 ]
 
 [package.dependencies]
@@ -1645,14 +1645,14 @@ xml = ["lxml (>=4.9.2)"]
 
 [[package]]
 name = "peft"
-version = "0.15.2"
+version = "0.16.0"
 description = "Parameter-Efficient Fine-Tuning (PEFT)"
 optional = false
 python-versions = ">=3.9.0"
 groups = ["main"]
 files = [
-    {file = "peft-0.15.2-py3-none-any.whl", hash = "sha256:0dfc942b03b7af4b7267cd4e30b15e3a4a1d277adc581ce6245fc13f1f93d0a0"},
-    {file = "peft-0.15.2.tar.gz", hash = "sha256:7059029f4d42a092ded1aa117dd366a46084aef638bdd593f6ab0195d5427fcd"},
+    {file = "peft-0.16.0-py3-none-any.whl", hash = "sha256:b5a2e08c053d12ddd0cf16ac7a320b2737e111943fc294d41173e72f780eeaef"},
+    {file = "peft-0.16.0.tar.gz", hash = "sha256:d7596bc938b0aac0a25b17b6b523c062ad7dd424dbd4d2398d1cc7ed0dc4eebf"},
 ]
 
 [package.dependencies]
@@ -2767,6 +2767,37 @@ tests = ["autopep8", "isort", "llnl-hatchet", "numpy", "pytest", "pytest-forked"
 tutorials = ["matplotlib", "pandas", "tabulate"]
 
 [[package]]
+name = "trl"
+version = "0.19.0"
+description = "Train transformer language models with reinforcement learning."
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "trl-0.19.0-py3-none-any.whl", hash = "sha256:0dcd0723c736648e8367d1e8943b646b4c0596812eda7e697984641e54428ed0"},
+    {file = "trl-0.19.0.tar.gz", hash = "sha256:b91fd44066f9fac58f9ca2717c3c9367eb8f75421599e403be35d3bbe87b8f35"},
+]
+
+[package.dependencies]
+accelerate = ">=1.4.0"
+datasets = ">=3.0.0"
+transformers = ">=4.51.0"
+
+[package.extras]
+bco = ["joblib", "scikit-learn"]
+deepspeed = ["deepspeed (>=0.14.4)"]
+dev = ["Pillow", "bitsandbytes", "deepspeed (>=0.14.4)", "diffusers (>=0.18.0)", "joblib", "liger-kernel (>=0.5.9)", "llm-blender (>=0.0.2)", "openai (>=1.23.2)", "parameterized", "peft (>=0.8.0)", "pytest", "pytest-cov", "pytest-rerunfailures", "pytest-xdist", "scikit-learn", "scikit-learn"]
+diffusers = ["diffusers (>=0.18.0)"]
+judges = ["llm-blender (>=0.0.2)", "openai (>=1.23.2)"]
+liger = ["liger-kernel (>=0.5.9)"]
+peft = ["peft (>=0.8.0)"]
+quantization = ["bitsandbytes"]
+scikit = ["scikit-learn"]
+test = ["parameterized", "pytest", "pytest-cov", "pytest-rerunfailures", "pytest-xdist"]
+vllm = ["fastapi ; python_version < \"3.13\"", "pydantic ; python_version < \"3.13\"", "requests ; python_version < \"3.13\"", "uvicorn ; python_version < \"3.13\"", "vllm (>=0.8.3) ; python_version < \"3.13\""]
+vlm = ["Pillow"]
+
+[[package]]
 name = "typing-extensions"
 version = "4.14.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
@@ -3171,4 +3202,4 @@ quantization = ["bitsandbytes"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9"
-content-hash = "ccde2959c45554fc12ff2e72611fc1d526f74f47e304a8eef2d5dda8da391283"
+content-hash = "c4043723015b5f5d03e209d9bfd9ab278a08eba35a848e5c62ecb23ae56f9fcc"

@@ -38,7 +38,7 @@ class StageConfig:
         default=False, metadata={"help": "Use Weights & Biases logging"}
     )
     wandb_project: str = field(
-        default="fnsft-pipeline", metadata={"help": "W&B project name"}
+        default="lmpipeline", metadata={"help": "W&B project name"}
     )
     wandb_run_name: Optional[str] = field(
         default=None, metadata={"help": "W&B run name"}
