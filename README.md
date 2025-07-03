@@ -1,8 +1,18 @@
 # FNSFT -- Functional Network Supervised Fine-Tuning
 
-A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques.
+A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques. Now featuring a **modular pipeline architecture** that supports multi-stage fine-tuning workflows including SFT, DPO, RLAIF, RL, and Chain-of-Thought distillation.
 
 ## 🚀 Features
+
+### 🔗 Modular Pipeline Architecture (NEW!)
+
+- **🎯 Multi-Stage Training**: Chain SFT → DPO → RLAIF → RL → CoT Distillation
+- **⚙️ Configurable Workflows**: Run any combination of stages in any order
+- **🔄 Stage Orchestration**: Automatic model passing between stages
+- **📊 Pipeline Monitoring**: Track progress and metrics across all stages
+- **🛠️ Extensible Design**: Easy to add custom training stages
+
+### 🔧 Core Training Features
 
 - **🔧 Quantized Model Support**: 4-bit and 8-bit quantization using BitsAndBytes
 - **⚡ Parameter Efficient Fine-Tuning**: LoRA/QLoRA for memory-efficient training
@@ -22,13 +32,32 @@ A production-ready Python framework for supervised fine-tuning of functional net
 ```bash
 git clone <repository-url>
 cd fnsft
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
 ### Development Install
 
 ```bash
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in development mode
 pip install -e .
+```
+
+### Alternative: Using Poetry
+
+```bash
+# If you prefer Poetry for dependency management
+poetry install
+poetry shell
 ```
 
 ## 🚀 Quick Start
@@ -65,7 +94,57 @@ python -m fnsft.sft_trainer \
     --convert_to_gguf
 ```
 
-### Using Configuration Files
+### 🔗 NEW: Modular Pipeline Usage
+
+#### SFT-Only Pipeline (Backward Compatible)
+
+```bash
+# Use the new pipeline system for SFT training
+fnsft-pipeline --config configs/sft_only_config.yaml
+```
+
+#### Multi-Stage Pipeline
+
+```bash
+# Run a complete SFT → DPO → RLAIF pipeline
+fnsft-pipeline --config configs/pipeline_config.yaml
+
+# Run specific stages only
+fnsft-pipeline --config configs/pipeline_config.yaml --stages sft dpo
+
+# Dry run to validate configuration
+fnsft-pipeline --config configs/pipeline_config.yaml --dry_run
+```
+
+#### Pipeline Configuration Example
+
+```yaml
+# Multi-stage pipeline configuration
+model_name_or_path: "microsoft/DialoGPT-medium"
+output_dir: "./outputs/pipeline_run"
+stages:
+  - "sft"
+  - "dpo"
+  - "cot_distillation"
+
+stage_configs:
+  sft:
+    dataset_name_or_path: "examples/sample_data.jsonl"
+    num_train_epochs: 3
+    learning_rate: 2e-4
+
+  dpo:
+    preference_dataset_path: "path/to/preferences.jsonl"
+    beta: 0.1
+    learning_rate: 5e-7
+
+  cot_distillation:
+    reasoning_dataset_path: "path/to/reasoning_data.jsonl"
+    teacher_model_path: "gpt-4"
+    teacher_model_type: "api"
+```
+
+### Using Configuration Files (Legacy SFT)
 
 ```bash
 python -m fnsft.sft_trainer --config configs/llama_7b_config.yaml

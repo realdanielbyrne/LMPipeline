@@ -1,0 +1,209 @@
+# Multi-Stage Fine-Tuning Pipeline Configuration
+# This configuration demonstrates a complete pipeline with all stages
+
+# Model configuration
+model_name_or_path: "microsoft/DialoGPT-medium"
+use_auth_token: false
+trust_remote_code: false
+torch_dtype: "float16"
+
+# Pipeline configuration
+output_dir: "./outputs/pipeline_run"
+stages:
+  - "sft"
+  - "dpo"
+  - "rlaif"
+  - "rl"
+  - "cot_distillation"
+
+# Global settings
+save_final_model: true
+cleanup_intermediate: false
+log_level: "INFO"
+
+# Stage-specific configurations
+stage_configs:
+  sft:
+    # Dataset configuration
+    dataset_name_or_path: "examples/sample_data.jsonl"
+    max_seq_length: 2048
+    instruction_template: "### Instruction:\n{instruction}\n\n### Response:\n{response}"
+    validation_split: 0.1
+    auto_detect_format: true
+    
+    # Quantization configuration
+    use_4bit: true
+    use_8bit: false
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_use_double_quant: true
+    
+    # LoRA configuration
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    lora_target_modules: null  # Auto-detect
+    lora_bias: "none"
+    
+    # Training configuration
+    num_train_epochs: 3
+    per_device_train_batch_size: 4
+    per_device_eval_batch_size: 4
+    gradient_accumulation_steps: 1
+    learning_rate: 2e-4
+    weight_decay: 0.001
+    warmup_ratio: 0.03
+    lr_scheduler_type: "cosine"
+    logging_steps: 10
+    save_steps: 500
+    eval_steps: 500
+    save_total_limit: 3
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_loss"
+    greater_is_better: false
+    
+    # Logging
+    use_wandb: false
+    wandb_project: "fnsft-pipeline"
+    
+  dpo:
+    # Dataset configuration
+    preference_dataset_path: "path/to/preference_data.jsonl"
+    max_seq_length: 2048
+    
+    # DPO-specific parameters
+    beta: 0.1
+    reference_model_path: null  # Use SFT model as reference
+    
+    # Training configuration
+    num_train_epochs: 1
+    per_device_train_batch_size: 2
+    learning_rate: 5e-7
+    gradient_accumulation_steps: 4
+    warmup_ratio: 0.1
+    validation_split: 0.1
+    
+    # Logging
+    use_wandb: false
+    wandb_project: "fnsft-pipeline"
+    
+  rlaif:
+    # Dataset configuration
+    prompt_dataset_path: "path/to/prompts.jsonl"
+    max_seq_length: 2048
+    
+    # AI Feedback configuration
+    feedback_model_path: "path/to/feedback_model"
+    feedback_model_type: "reward_model"
+    
+    # RL configuration
+    ppo_epochs: 4
+    batch_size: 64
+    mini_batch_size: 16
+    learning_rate: 1.4e-5
+    
+    # Generation parameters
+    generation_kwargs:
+      max_new_tokens: 256
+      temperature: 0.7
+      do_sample: true
+      top_p: 0.9
+    
+    # Training configuration
+    num_training_steps: 1000
+    save_freq: 100
+    
+    # Logging
+    use_wandb: false
+    wandb_project: "fnsft-pipeline"
+    
+  rl:
+    # Dataset configuration
+    prompt_dataset_path: "path/to/prompts.jsonl"
+    max_seq_length: 2048
+    
+    # Reward configuration
+    reward_model_path: "path/to/reward_model"
+    reward_model_type: "classification"
+    
+    # RL algorithm configuration
+    algorithm: "ppo"
+    ppo_epochs: 4
+    batch_size: 64
+    mini_batch_size: 16
+    
+    # Training parameters
+    learning_rate: 1.4e-5
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_range: 0.2
+    value_loss_coef: 0.5
+    entropy_coef: 0.01
+    
+    # KL divergence control
+    kl_penalty: "kl"
+    init_kl_coef: 0.2
+    target_kl: 6.0
+    
+    # Generation parameters
+    generation_kwargs:
+      max_new_tokens: 256
+      temperature: 0.7
+      do_sample: true
+      top_p: 0.9
+    
+    # Training configuration
+    num_training_steps: 1000
+    save_freq: 100
+    eval_freq: 50
+    
+    # Logging
+    use_wandb: false
+    wandb_project: "fnsft-pipeline"
+    
+  cot_distillation:
+    # Dataset configuration
+    reasoning_dataset_path: "path/to/reasoning_data.jsonl"
+    max_seq_length: 4096
+    
+    # Teacher model configuration
+    teacher_model_path: "gpt-4"
+    teacher_model_type: "api"
+    teacher_api_key: null  # Set via environment variable
+    
+    # Distillation configuration
+    distillation_type: "response"
+    temperature: 3.0
+    alpha: 0.7
+    
+    # CoT-specific parameters
+    cot_template: "Let's think step by step.\n\n{reasoning}\n\nTherefore, the answer is: {answer}"
+    reasoning_types:
+      - "mathematical"
+      - "logical"
+      - "commonsense"
+    
+    # Data generation parameters
+    generate_synthetic_data: true
+    num_synthetic_examples: 10000
+    
+    # Training configuration
+    num_train_epochs: 3
+    per_device_train_batch_size: 2
+    per_device_eval_batch_size: 2
+    gradient_accumulation_steps: 8
+    learning_rate: 1e-5
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    validation_split: 0.1
+    
+    # Evaluation
+    eval_reasoning_tasks:
+      - "gsm8k"
+      - "math"
+      - "arc"
+      - "hellaswag"
+    
+    # Logging
+    use_wandb: false
+    wandb_project: "fnsft-pipeline"

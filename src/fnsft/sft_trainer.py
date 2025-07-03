@@ -17,47 +17,42 @@ import sys
 import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Literal
 import warnings
 
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 import transformers
+from transformers.utils.quantization_config import BitsAndBytesConfig
+from transformers.training_args import TrainingArguments
+from transformers.trainer import Trainer
+from transformers.data.data_collator import DataCollatorForLanguageModeling
+from transformers.trainer_callback import EarlyStoppingCallback
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    BitsAndBytesConfig,
-    TrainingArguments,
-    Trainer,
-    DataCollatorForLanguageModeling,
-    EarlyStoppingCallback,
 )
-from datasets import Dataset as HFDataset, load_dataset
-from peft import (
-    LoraConfig,
-    get_peft_model,
-    prepare_model_for_kbit_training,
-    TaskType,
-    PeftModel,
-)
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+from transformers.modeling_utils import PreTrainedModel
+from datasets import load_dataset
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, TaskType
 from huggingface_hub import HfApi, login, whoami
-from huggingface_hub.utils import RepositoryNotFoundError, HfHubHTTPError
+from huggingface_hub.errors import RepositoryNotFoundError, HfHubHTTPError
 import wandb
 from tqdm.auto import tqdm
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore", category=UserWarning)
-transformers.logging.set_verbosity_error()
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler('sft_training.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
+        logging.FileHandler("sft_training.log"),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -65,98 +60,86 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ModelArguments:
     """Arguments for model configuration."""
+
     model_name_or_path: str = field(
-        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+        metadata={
+            "help": "Path to pretrained model or model identifier from huggingface.co/models"
+        }
     )
     use_auth_token: bool = field(
         default=False,
-        metadata={"help": "Use HuggingFace auth token for private models"}
+        metadata={"help": "Use HuggingFace auth token for private models"},
     )
     trust_remote_code: bool = field(
-        default=False,
-        metadata={"help": "Trust remote code when loading model"}
+        default=False, metadata={"help": "Trust remote code when loading model"}
     )
     torch_dtype: str = field(
         default="auto",
-        metadata={"help": "Torch dtype for model loading (auto, float16, bfloat16, float32)"}
+        metadata={
+            "help": "Torch dtype for model loading (auto, float16, bfloat16, float32)"
+        },
     )
 
 
 @dataclass
 class DataArguments:
     """Arguments for data configuration."""
+
     dataset_name_or_path: str = field(
         metadata={"help": "Path to dataset file or HuggingFace dataset name"}
     )
     dataset_config_name: Optional[str] = field(
-        default=None,
-        metadata={"help": "Configuration name for HuggingFace dataset"}
+        default=None, metadata={"help": "Configuration name for HuggingFace dataset"}
     )
     max_seq_length: int = field(
-        default=2048,
-        metadata={"help": "Maximum sequence length for tokenization"}
+        default=2048, metadata={"help": "Maximum sequence length for tokenization"}
     )
     instruction_template: str = field(
         default="### Instruction:\n{instruction}\n\n### Response:\n{response}",
-        metadata={"help": "Template for formatting instruction-response pairs"}
+        metadata={"help": "Template for formatting instruction-response pairs"},
     )
     validation_split: float = field(
-        default=0.1,
-        metadata={"help": "Fraction of data to use for validation"}
+        default=0.1, metadata={"help": "Fraction of data to use for validation"}
     )
     auto_detect_format: bool = field(
         default=True,
-        metadata={"help": "Automatically detect and convert dataset format"}
+        metadata={"help": "Automatically detect and convert dataset format"},
     )
 
 
 @dataclass
 class QuantizationArguments:
     """Arguments for quantization configuration."""
-    use_4bit: bool = field(
-        default=True,
-        metadata={"help": "Use 4-bit quantization"}
-    )
+
+    use_4bit: bool = field(default=True, metadata={"help": "Use 4-bit quantization"})
     use_8bit: bool = field(
         default=False,
-        metadata={"help": "Use 8-bit quantization (overrides 4-bit if True)"}
+        metadata={"help": "Use 8-bit quantization (overrides 4-bit if True)"},
     )
     bnb_4bit_compute_dtype: str = field(
-        default="float16",
-        metadata={"help": "Compute dtype for 4-bit quantization"}
+        default="float16", metadata={"help": "Compute dtype for 4-bit quantization"}
     )
     bnb_4bit_quant_type: str = field(
-        default="nf4",
-        metadata={"help": "Quantization type for 4-bit (nf4, fp4)"}
+        default="nf4", metadata={"help": "Quantization type for 4-bit (nf4, fp4)"}
     )
     bnb_4bit_use_double_quant: bool = field(
-        default=True,
-        metadata={"help": "Use double quantization for 4-bit"}
+        default=True, metadata={"help": "Use double quantization for 4-bit"}
     )
 
 
 @dataclass
 class LoRAArguments:
     """Arguments for LoRA configuration."""
-    lora_r: int = field(
-        default=16,
-        metadata={"help": "LoRA rank"}
-    )
-    lora_alpha: int = field(
-        default=32,
-        metadata={"help": "LoRA alpha parameter"}
-    )
-    lora_dropout: float = field(
-        default=0.1,
-        metadata={"help": "LoRA dropout"}
-    )
+
+    lora_r: int = field(default=16, metadata={"help": "LoRA rank"})
+    lora_alpha: int = field(default=32, metadata={"help": "LoRA alpha parameter"})
+    lora_dropout: float = field(default=0.1, metadata={"help": "LoRA dropout"})
     lora_target_modules: Optional[List[str]] = field(
         default=None,
-        metadata={"help": "Target modules for LoRA (auto-detected if None)"}
+        metadata={"help": "Target modules for LoRA (auto-detected if None)"},
     )
-    lora_bias: str = field(
-        default="none",
-        metadata={"help": "LoRA bias type (none, all, lora_only)"}
+    lora_bias: Literal["none", "all", "lora_only"] = field(
+        default="none", metadata={"help": "LoRA bias type (none, all, lora_only)"}
     )
 
 
@@ -166,28 +149,42 @@ class DatasetFormatter:
     # Common dataset format mappings
     FORMAT_MAPPINGS = {
         # Standard instruction-response formats
-        ("instruction", "response"): lambda item: {"instruction": item["instruction"], "response": item["response"]},
-        ("instruction", "output"): lambda item: {"instruction": item["instruction"], "response": item["output"]},
-
+        ("instruction", "response"): lambda item: {
+            "instruction": item["instruction"],
+            "response": item["response"],
+        },
+        ("instruction", "output"): lambda item: {
+            "instruction": item["instruction"],
+            "response": item["output"],
+        },
         # Instruction with input context
         ("instruction", "input", "output"): lambda item: {
-            "instruction": f"{item['instruction']}\n\nInput: {item['input']}" if item.get("input", "").strip() else item["instruction"],
-            "response": item["output"]
+            "instruction": (
+                f"{item['instruction']}\n\nInput: {item['input']}"
+                if item.get("input", "").strip()
+                else item["instruction"]
+            ),
+            "response": item["output"],
         },
-
         # Prompt-completion formats
-        ("prompt", "completion"): lambda item: {"instruction": item["prompt"], "response": item["completion"]},
-        ("prompt", "response"): lambda item: {"instruction": item["prompt"], "response": item["response"]},
-
+        ("prompt", "completion"): lambda item: {
+            "instruction": item["prompt"],
+            "response": item["completion"],
+        },
+        ("prompt", "response"): lambda item: {
+            "instruction": item["prompt"],
+            "response": item["response"],
+        },
         # Question-answer formats
-        ("question", "answer"): lambda item: {"instruction": item["question"], "response": item["answer"]},
-
+        ("question", "answer"): lambda item: {
+            "instruction": item["question"],
+            "response": item["answer"],
+        },
         # Context-based formats
         ("context", "question", "answer"): lambda item: {
             "instruction": f"Context: {item['context']}\n\nQuestion: {item['question']}",
-            "response": item["answer"]
+            "response": item["answer"],
         },
-
         # Text-only format (already formatted)
         ("text",): lambda item: {"text": item["text"]},
     }
@@ -248,11 +245,15 @@ class DatasetFormatter:
             return ("messages",)
 
         # Fallback: use all available keys
-        logger.warning(f"Unknown dataset format detected. Available keys: {sorted_keys}")
+        logger.warning(
+            f"Unknown dataset format detected. Available keys: {sorted_keys}"
+        )
         return sorted_keys
 
     @staticmethod
-    def convert_to_standard_format(item: Dict[str, Any], format_keys: tuple) -> Dict[str, str]:
+    def convert_to_standard_format(
+        item: Dict[str, Any], format_keys: tuple
+    ) -> Dict[str, str]:
         """
         Convert a dataset item to standard instruction-response format.
 
@@ -304,7 +305,14 @@ class DatasetFormatter:
         """Infer format and convert to standard format."""
         # Try to identify instruction-like and response-like fields
         instruction_candidates = ["instruction", "prompt", "question", "input", "query"]
-        response_candidates = ["response", "output", "answer", "completion", "target", "result"]
+        response_candidates = [
+            "response",
+            "output",
+            "answer",
+            "completion",
+            "target",
+            "result",
+        ]
 
         instruction_key = None
         response_key = None
@@ -317,7 +325,10 @@ class DatasetFormatter:
                 response_key = key
 
         if instruction_key and response_key:
-            return {"instruction": str(item[instruction_key]), "response": str(item[response_key])}
+            return {
+                "instruction": str(item[instruction_key]),
+                "response": str(item[response_key]),
+            }
         elif len(format_keys) == 1 and "text" in format_keys:
             return {"text": str(item["text"])}
         else:
@@ -332,10 +343,10 @@ class InstructionDataset(Dataset):
     def __init__(
         self,
         data: List[Dict[str, Any]],
-        tokenizer: AutoTokenizer,
+        tokenizer: PreTrainedTokenizerBase,
         max_length: int = 2048,
         instruction_template: str = "### Instruction:\n{instruction}\n\n### Response:\n{response}",
-        auto_detect_format: bool = True
+        auto_detect_format: bool = True,
     ):
         self.data = data
         self.tokenizer = tokenizer
@@ -344,8 +355,10 @@ class InstructionDataset(Dataset):
         self.auto_detect_format = auto_detect_format
 
         # Set pad token if not exists
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
+        if getattr(tokenizer, "pad_token", None) is None:
+            eos_token = getattr(tokenizer, "eos_token", None)
+            if eos_token is not None:
+                tokenizer.pad_token = eos_token
 
         # Detect and log dataset format
         if self.auto_detect_format and data:
@@ -354,7 +367,9 @@ class InstructionDataset(Dataset):
 
             # Convert first sample to show the transformation
             if len(data) > 0:
-                sample_converted = DatasetFormatter.convert_to_standard_format(data[0], self.detected_format)
+                sample_converted = DatasetFormatter.convert_to_standard_format(
+                    data[0], self.detected_format
+                )
                 logger.info(f"Sample conversion: {data[0]} -> {sample_converted}")
         else:
             self.detected_format = None
@@ -368,9 +383,13 @@ class InstructionDataset(Dataset):
         # Convert to standard format if auto-detection is enabled
         if self.auto_detect_format and self.detected_format:
             try:
-                converted_item = DatasetFormatter.convert_to_standard_format(item, self.detected_format)
+                converted_item = DatasetFormatter.convert_to_standard_format(
+                    item, self.detected_format
+                )
             except Exception as e:
-                logger.warning(f"Failed to convert item {idx}: {e}. Using original format.")
+                logger.warning(
+                    f"Failed to convert item {idx}: {e}. Using original format."
+                )
                 converted_item = item
         else:
             converted_item = item
@@ -379,7 +398,7 @@ class InstructionDataset(Dataset):
         if "instruction" in converted_item and "response" in converted_item:
             text = self.instruction_template.format(
                 instruction=converted_item["instruction"],
-                response=converted_item["response"]
+                response=converted_item["response"],
             )
         elif "text" in converted_item:
             text = converted_item["text"]
@@ -387,8 +406,7 @@ class InstructionDataset(Dataset):
             # Fallback for legacy behavior
             if "instruction" in item and "response" in item:
                 text = self.instruction_template.format(
-                    instruction=item["instruction"],
-                    response=item["response"]
+                    instruction=item["instruction"], response=item["response"]
                 )
             elif "text" in item:
                 text = item["text"]
@@ -399,33 +417,36 @@ class InstructionDataset(Dataset):
                 )
 
         # Tokenize
-        encoding = self.tokenizer(
+        encoding = self.tokenizer.__call__(
             text,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
-            return_tensors="pt"
+            return_tensors="pt",
         )
-
+        input_ids = encoding["input_ids"].squeeze()
+        attention_mask = encoding["attention_mask"].squeeze()
         return {
-            "input_ids": encoding["input_ids"].flatten(),
-            "attention_mask": encoding["attention_mask"].flatten(),
-            "labels": encoding["input_ids"].flatten().clone()
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": input_ids.clone(),
         }
 
 
-def load_quantization_config(quant_args: QuantizationArguments) -> Optional[BitsAndBytesConfig]:
+def load_quantization_config(
+    quant_args: QuantizationArguments,
+) -> Optional[BitsAndBytesConfig]:
     """Load quantization configuration."""
     if not (quant_args.use_4bit or quant_args.use_8bit):
         return None
-    
+
     if quant_args.use_8bit:
         logger.info("Using 8-bit quantization")
         return BitsAndBytesConfig(load_in_8bit=True)
-    
+
     logger.info("Using 4-bit quantization")
     compute_dtype = getattr(torch, quant_args.bnb_4bit_compute_dtype)
-    
+
     return BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_compute_dtype=compute_dtype,
@@ -435,31 +456,31 @@ def load_quantization_config(quant_args: QuantizationArguments) -> Optional[Bits
 
 
 def load_model_and_tokenizer(
-    model_args: ModelArguments,
-    quant_config: Optional[BitsAndBytesConfig]
-) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
+    model_args: ModelArguments, quant_config: Optional[BitsAndBytesConfig]
+) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
     """Load model and tokenizer with quantization."""
     logger.info(f"Loading model: {model_args.model_name_or_path}")
-    
+
     # Determine torch dtype
     torch_dtype = torch.float16
     if model_args.torch_dtype == "bfloat16":
         torch_dtype = torch.bfloat16
     elif model_args.torch_dtype == "float32":
         torch_dtype = torch.float32
-    
+
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
         trust_remote_code=model_args.trust_remote_code,
         use_auth_token=model_args.use_auth_token,
     )
-    
     # Set pad token if not exists
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    
+    if getattr(tokenizer, "pad_token", None) is None:
+        eos_token = getattr(tokenizer, "eos_token", None)
+        if eos_token is not None:
+            tokenizer.pad_token = eos_token
+            tokenizer.pad_token_id = getattr(tokenizer, "eos_token_id", None)
+
     # Load model
     model = AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
@@ -469,37 +490,46 @@ def load_model_and_tokenizer(
         use_auth_token=model_args.use_auth_token,
         device_map="auto",
     )
-    
+
     return model, tokenizer
 
 
-def setup_lora(model: AutoModelForCausalLM, lora_args: LoRAArguments) -> AutoModelForCausalLM:
+def setup_lora(model: PreTrainedModel, lora_args: LoRAArguments) -> PreTrainedModel:
     """Setup LoRA configuration for the model."""
     logger.info("Setting up LoRA configuration")
-    
+
     # Prepare model for k-bit training
     model = prepare_model_for_kbit_training(model)
-    
+
     # Auto-detect target modules if not specified
     target_modules = lora_args.lora_target_modules
     if target_modules is None:
         # Common target modules for different architectures
-        if hasattr(model.config, 'model_type'):
+        if hasattr(model, "config") and hasattr(model.config, "model_type"):
             model_type = model.config.model_type.lower()
-            if 'llama' in model_type or 'mistral' in model_type:
-                target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
-            elif 'gpt' in model_type:
+            if "llama" in model_type or "mistral" in model_type:
+                target_modules = [
+                    "q_proj",
+                    "k_proj",
+                    "v_proj",
+                    "o_proj",
+                    "gate_proj",
+                    "up_proj",
+                    "down_proj",
+                ]
+            elif "gpt" in model_type:
                 target_modules = ["c_attn", "c_proj", "c_fc"]
             else:
                 # Fallback: find all linear layers
                 target_modules = []
-                for name, module in model.named_modules():
-                    if isinstance(module, nn.Linear):
-                        target_modules.append(name.split('.')[-1])
+                if hasattr(model, "named_modules"):
+                    for name, module in model.named_modules():
+                        if isinstance(module, nn.Linear):
+                            target_modules.append(name.split(".")[-1])
                 target_modules = list(set(target_modules))
-        
+
         logger.info(f"Auto-detected target modules: {target_modules}")
-    
+
     # Configure LoRA
     lora_config = LoraConfig(
         r=lora_args.lora_r,
@@ -509,50 +539,44 @@ def setup_lora(model: AutoModelForCausalLM, lora_args: LoRAArguments) -> AutoMod
         bias=lora_args.lora_bias,
         task_type=TaskType.CAUSAL_LM,
     )
-    
+
     # Apply LoRA to model
-    model = get_peft_model(model, lora_config)
-    model.print_trainable_parameters()
-    
+    model = get_peft_model(model, lora_config)  # type: ignore
+    ptp = getattr(model, "print_trainable_parameters", None)
+    if callable(ptp):
+        ptp()
+
     return model
 
 
 def load_dataset_from_path(data_args: DataArguments) -> List[Dict[str, Any]]:
     """Load dataset from local file or HuggingFace hub."""
     dataset_path = data_args.dataset_name_or_path
-
     if os.path.isfile(dataset_path):
         logger.info(f"Loading dataset from local file: {dataset_path}")
-
         # Load from local file
-        if dataset_path.endswith('.json'):
-            with open(dataset_path, 'r', encoding='utf-8') as f:
+        if dataset_path.endswith(".json"):
+            with open(dataset_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        elif dataset_path.endswith('.jsonl'):
+        elif dataset_path.endswith(".jsonl"):
             data = []
-            with open(dataset_path, 'r', encoding='utf-8') as f:
+            with open(dataset_path, "r", encoding="utf-8") as f:
                 for line in f:
                     data.append(json.loads(line.strip()))
         else:
             raise ValueError(f"Unsupported file format: {dataset_path}")
     else:
         logger.info(f"Loading dataset from HuggingFace hub: {dataset_path}")
-
-        # Load from HuggingFace hub
         dataset = load_dataset(
-            dataset_path,
-            data_args.dataset_config_name,
-            split="train"
+            dataset_path, data_args.dataset_config_name, split="train"
         )
         data = [item for item in dataset]
-
     logger.info(f"Loaded {len(data)} examples")
-    return data
+    return data  # type: ignore
 
 
 def split_dataset(
-    data: List[Dict[str, Any]],
-    validation_split: float = 0.1
+    data: List[Dict[str, Any]], validation_split: float = 0.1
 ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Split dataset into train and validation sets."""
     if validation_split <= 0:
@@ -567,12 +591,12 @@ def split_dataset(
 
 
 def create_trainer(
-    model: AutoModelForCausalLM,
-    tokenizer: AutoTokenizer,
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
     train_dataset: Dataset,
     eval_dataset: Optional[Dataset],
     training_args: TrainingArguments,
-    data_collator: DataCollatorForLanguageModeling
+    data_collator: DataCollatorForLanguageModeling,
 ) -> Trainer:
     """Create and configure the trainer."""
 
@@ -593,9 +617,7 @@ def create_trainer(
 
 
 def save_model_and_tokenizer(
-    model: AutoModelForCausalLM,
-    tokenizer: AutoTokenizer,
-    output_dir: str
+    model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, output_dir: str
 ) -> None:
     """Save the fine-tuned model and tokenizer."""
     logger.info(f"Saving model to {output_dir}")
@@ -604,16 +626,16 @@ def save_model_and_tokenizer(
     os.makedirs(output_dir, exist_ok=True)
 
     # Save model and tokenizer
-    model.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
+    if hasattr(model, "save_pretrained"):
+        model.save_pretrained(output_dir)
+    if hasattr(tokenizer, "save_pretrained"):
+        tokenizer.save_pretrained(output_dir)
 
     logger.info("Model and tokenizer saved successfully")
 
 
 def convert_to_gguf(
-    model_path: str,
-    output_path: str,
-    quantization: str = "q4_0"
+    model_path: str, output_path: str, quantization: str = "q4_0"
 ) -> None:
     """Convert model to GGUF format for Ollama compatibility."""
     try:
@@ -625,10 +647,13 @@ def convert_to_gguf(
         convert_script = "convert-hf-to-gguf.py"
 
         cmd = [
-            "python", convert_script,
+            "python",
+            convert_script,
             model_path,
-            "--outfile", output_path,
-            "--outtype", quantization
+            "--outfile",
+            output_path,
+            "--outtype",
+            quantization,
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -646,19 +671,19 @@ def convert_to_gguf(
 
 def load_config_from_yaml(config_path: str) -> Dict[str, Any]:
     """Load configuration from YAML file."""
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         config = yaml.safe_load(f)
     return config
 
 
 def upload_to_hub(
     model_path: str,
-    tokenizer: AutoTokenizer,
+    tokenizer: PreTrainedTokenizerBase,
     repo_id: str,
     commit_message: Optional[str] = None,
     private: bool = False,
     token: Optional[str] = None,
-    push_adapter_only: bool = False
+    push_adapter_only: bool = False,
 ) -> None:
     """
     Upload fine-tuned model to Hugging Face Hub.
@@ -722,13 +747,17 @@ def upload_to_hub(
             token = os.getenv("HF_TOKEN")
 
         if token is None:
-            logger.info("No HF_TOKEN found in environment. Attempting to use cached credentials...")
+            logger.info(
+                "No HF_TOKEN found in environment. Attempting to use cached credentials..."
+            )
             try:
                 # Check if user is already logged in
                 user_info = whoami(token=token)
                 logger.info(f"Using cached credentials for user: {user_info['name']}")
             except Exception:
-                logger.info("No cached credentials found. Please log in to Hugging Face Hub...")
+                logger.info(
+                    "No cached credentials found. Please log in to Hugging Face Hub..."
+                )
                 login()
         else:
             logger.info("Using provided authentication token")
@@ -743,10 +772,7 @@ def upload_to_hub(
         except RepositoryNotFoundError:
             logger.info(f"Creating new repository: {repo_id}")
             api.create_repo(
-                repo_id=repo_id,
-                repo_type="model",
-                private=private,
-                exist_ok=True
+                repo_id=repo_id, repo_type="model", private=private, exist_ok=True
             )
 
         # Determine which files to upload
@@ -757,7 +783,7 @@ def upload_to_hub(
             adapter_files = [
                 "adapter_config.json",
                 "adapter_model.safetensors",
-                "adapter_model.bin"  # fallback for older format
+                "adapter_model.bin",  # fallback for older format
             ]
 
             for file_name in adapter_files:
@@ -775,12 +801,13 @@ def upload_to_hub(
 
         # Upload tokenizer first
         logger.info("Uploading tokenizer...")
-        tokenizer.push_to_hub(
-            repo_id=repo_id,
-            commit_message=f"{commit_message} - tokenizer",
-            token=token,
-            private=private
-        )
+        if hasattr(tokenizer, "push_to_hub"):
+            tokenizer.push_to_hub(
+                repo_id=repo_id,
+                commit_message=f"{commit_message} - tokenizer",
+                token=token,
+                private=private,
+            )
 
         # Upload model files
         if push_adapter_only:
@@ -794,7 +821,7 @@ def upload_to_hub(
                     repo_id=repo_id,
                     repo_type="model",
                     commit_message=f"{commit_message} - {file_name}",
-                    token=token
+                    token=token,
                 )
         else:
             # Upload entire model directory
@@ -813,7 +840,7 @@ def upload_to_hub(
                         repo_id=repo_id,
                         commit_message=commit_message,
                         token=token,
-                        private=private
+                        private=private,
                     )
                 else:
                     # Regular model upload
@@ -822,7 +849,7 @@ def upload_to_hub(
                         repo_id=repo_id,
                         commit_message=commit_message,
                         token=token,
-                        private=private
+                        private=private,
                     )
             except Exception as e:
                 logger.warning(f"Failed to upload using transformers: {e}")
@@ -834,21 +861,29 @@ def upload_to_hub(
                     repo_id=repo_id,
                     repo_type="model",
                     commit_message=commit_message,
-                    token=token
+                    token=token,
                 )
 
-        logger.info(f"✅ Successfully uploaded model to: https://huggingface.co/{repo_id}")
+        logger.info(
+            f"✅ Successfully uploaded model to: https://huggingface.co/{repo_id}"
+        )
 
     except RepositoryNotFoundError as e:
         logger.error(f"Repository not found and could not be created: {e}")
         raise
     except HfHubHTTPError as e:
         if "401" in str(e):
-            logger.error("Authentication failed. Please check your token or run 'huggingface-cli login'")
+            logger.error(
+                "Authentication failed. Please check your token or run 'huggingface-cli login'"
+            )
         elif "403" in str(e):
-            logger.error("Permission denied. Check if you have write access to the repository")
+            logger.error(
+                "Permission denied. Check if you have write access to the repository"
+            )
         elif "404" in str(e):
-            logger.error("Repository not found. Make sure the repository name is correct")
+            logger.error(
+                "Repository not found. Make sure the repository name is correct"
+            )
         else:
             logger.error(f"HTTP error during upload: {e}")
         raise
@@ -863,120 +898,252 @@ def upload_to_hub(
 def main():
     """Main training function."""
     # Parse arguments
-    parser = argparse.ArgumentParser(description="Supervised Fine-Tuning for Language Models")
+    parser = argparse.ArgumentParser(
+        description="Supervised Fine-Tuning for Language Models"
+    )
 
     # Configuration file option
-    parser.add_argument("--config", type=str, default=None,
-                       help="Path to YAML configuration file")
+    parser.add_argument(
+        "--config", type=str, default=None, help="Path to YAML configuration file"
+    )
 
     # Model arguments
-    parser.add_argument("--model_name_or_path", type=str, required=True,
-                       help="Path to pretrained model or model identifier")
-    parser.add_argument("--use_auth_token", action="store_true",
-                       help="Use HuggingFace auth token")
-    parser.add_argument("--trust_remote_code", action="store_true",
-                       help="Trust remote code when loading model")
-    parser.add_argument("--torch_dtype", type=str, default="auto",
-                       choices=["auto", "float16", "bfloat16", "float32"],
-                       help="Torch dtype for model loading")
+    parser.add_argument(
+        "--model_name_or_path",
+        type=str,
+        required=True,
+        help="Path to pretrained model or model identifier",
+    )
+    parser.add_argument(
+        "--use_auth_token", action="store_true", help="Use HuggingFace auth token"
+    )
+    parser.add_argument(
+        "--trust_remote_code",
+        action="store_true",
+        help="Trust remote code when loading model",
+    )
+    parser.add_argument(
+        "--torch_dtype",
+        type=str,
+        default="auto",
+        choices=["auto", "float16", "bfloat16", "float32"],
+        help="Torch dtype for model loading",
+    )
 
     # Data arguments
-    parser.add_argument("--dataset_name_or_path", type=str, required=True,
-                       help="Path to dataset file or HuggingFace dataset name")
-    parser.add_argument("--dataset_config_name", type=str, default=None,
-                       help="Configuration name for HuggingFace dataset")
-    parser.add_argument("--max_seq_length", type=int, default=2048,
-                       help="Maximum sequence length")
-    parser.add_argument("--instruction_template", type=str,
-                       default="### Instruction:\n{instruction}\n\n### Response:\n{response}",
-                       help="Template for formatting instruction-response pairs")
-    parser.add_argument("--validation_split", type=float, default=0.1,
-                       help="Fraction of data for validation")
-    parser.add_argument("--auto_detect_format", action="store_true", default=True,
-                       help="Automatically detect and convert dataset format")
-    parser.add_argument("--no_auto_detect_format", dest="auto_detect_format", action="store_false",
-                       help="Disable automatic dataset format detection")
+    parser.add_argument(
+        "--dataset_name_or_path",
+        type=str,
+        required=True,
+        help="Path to dataset file or HuggingFace dataset name",
+    )
+    parser.add_argument(
+        "--dataset_config_name",
+        type=str,
+        default=None,
+        help="Configuration name for HuggingFace dataset",
+    )
+    parser.add_argument(
+        "--max_seq_length", type=int, default=2048, help="Maximum sequence length"
+    )
+    parser.add_argument(
+        "--instruction_template",
+        type=str,
+        default="### Instruction:\n{instruction}\n\n### Response:\n{response}",
+        help="Template for formatting instruction-response pairs",
+    )
+    parser.add_argument(
+        "--validation_split",
+        type=float,
+        default=0.1,
+        help="Fraction of data for validation",
+    )
+    parser.add_argument(
+        "--auto_detect_format",
+        action="store_true",
+        default=True,
+        help="Automatically detect and convert dataset format",
+    )
+    parser.add_argument(
+        "--no_auto_detect_format",
+        dest="auto_detect_format",
+        action="store_false",
+        help="Disable automatic dataset format detection",
+    )
 
     # Quantization arguments
-    parser.add_argument("--use_4bit", action="store_true", default=True,
-                       help="Use 4-bit quantization")
-    parser.add_argument("--use_8bit", action="store_true",
-                       help="Use 8-bit quantization")
-    parser.add_argument("--bnb_4bit_compute_dtype", type=str, default="float16",
-                       help="Compute dtype for 4-bit quantization")
-    parser.add_argument("--bnb_4bit_quant_type", type=str, default="nf4",
-                       choices=["nf4", "fp4"], help="4-bit quantization type")
-    parser.add_argument("--bnb_4bit_use_double_quant", action="store_true", default=True,
-                       help="Use double quantization for 4-bit")
+    parser.add_argument(
+        "--use_4bit", action="store_true", default=True, help="Use 4-bit quantization"
+    )
+    parser.add_argument(
+        "--use_8bit", action="store_true", help="Use 8-bit quantization"
+    )
+    parser.add_argument(
+        "--bnb_4bit_compute_dtype",
+        type=str,
+        default="float16",
+        help="Compute dtype for 4-bit quantization",
+    )
+    parser.add_argument(
+        "--bnb_4bit_quant_type",
+        type=str,
+        default="nf4",
+        choices=["nf4", "fp4"],
+        help="4-bit quantization type",
+    )
+    parser.add_argument(
+        "--bnb_4bit_use_double_quant",
+        action="store_true",
+        default=True,
+        help="Use double quantization for 4-bit",
+    )
 
     # LoRA arguments
     parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
     parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
     parser.add_argument("--lora_dropout", type=float, default=0.1, help="LoRA dropout")
-    parser.add_argument("--lora_target_modules", type=str, nargs="+", default=None,
-                       help="Target modules for LoRA")
-    parser.add_argument("--lora_bias", type=str, default="none",
-                       choices=["none", "all", "lora_only"], help="LoRA bias type")
+    parser.add_argument(
+        "--lora_target_modules",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Target modules for LoRA",
+    )
+    parser.add_argument(
+        "--lora_bias",
+        type=str,
+        default="none",
+        choices=["none", "all", "lora_only"],
+        help="LoRA bias type",
+    )
 
     # Training arguments
-    parser.add_argument("--output_dir", type=str, required=True,
-                       help="Output directory for model checkpoints")
-    parser.add_argument("--num_train_epochs", type=int, default=3,
-                       help="Number of training epochs")
-    parser.add_argument("--per_device_train_batch_size", type=int, default=4,
-                       help="Training batch size per device")
-    parser.add_argument("--per_device_eval_batch_size", type=int, default=4,
-                       help="Evaluation batch size per device")
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=1,
-                       help="Gradient accumulation steps")
-    parser.add_argument("--learning_rate", type=float, default=2e-4,
-                       help="Learning rate")
-    parser.add_argument("--weight_decay", type=float, default=0.001,
-                       help="Weight decay")
-    parser.add_argument("--warmup_ratio", type=float, default=0.03,
-                       help="Warmup ratio")
-    parser.add_argument("--lr_scheduler_type", type=str, default="cosine",
-                       help="Learning rate scheduler type")
-    parser.add_argument("--logging_steps", type=int, default=10,
-                       help="Logging steps")
-    parser.add_argument("--save_steps", type=int, default=500,
-                       help="Save checkpoint steps")
-    parser.add_argument("--eval_steps", type=int, default=500,
-                       help="Evaluation steps")
-    parser.add_argument("--save_total_limit", type=int, default=3,
-                       help="Maximum number of checkpoints to keep")
-    parser.add_argument("--load_best_model_at_end", action="store_true", default=True,
-                       help="Load best model at end of training")
-    parser.add_argument("--metric_for_best_model", type=str, default="eval_loss",
-                       help="Metric for best model selection")
-    parser.add_argument("--greater_is_better", action="store_true",
-                       help="Whether higher metric is better")
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Output directory for model checkpoints",
+    )
+    parser.add_argument(
+        "--num_train_epochs", type=int, default=3, help="Number of training epochs"
+    )
+    parser.add_argument(
+        "--per_device_train_batch_size",
+        type=int,
+        default=4,
+        help="Training batch size per device",
+    )
+    parser.add_argument(
+        "--per_device_eval_batch_size",
+        type=int,
+        default=4,
+        help="Evaluation batch size per device",
+    )
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=1,
+        help="Gradient accumulation steps",
+    )
+    parser.add_argument(
+        "--learning_rate", type=float, default=2e-4, help="Learning rate"
+    )
+    parser.add_argument(
+        "--weight_decay", type=float, default=0.001, help="Weight decay"
+    )
+    parser.add_argument("--warmup_ratio", type=float, default=0.03, help="Warmup ratio")
+    parser.add_argument(
+        "--lr_scheduler_type",
+        type=str,
+        default="cosine",
+        help="Learning rate scheduler type",
+    )
+    parser.add_argument("--logging_steps", type=int, default=10, help="Logging steps")
+    parser.add_argument(
+        "--save_steps", type=int, default=500, help="Save checkpoint steps"
+    )
+    parser.add_argument("--eval_steps", type=int, default=500, help="Evaluation steps")
+    parser.add_argument(
+        "--save_total_limit",
+        type=int,
+        default=3,
+        help="Maximum number of checkpoints to keep",
+    )
+    parser.add_argument(
+        "--load_best_model_at_end",
+        action="store_true",
+        default=True,
+        help="Load best model at end of training",
+    )
+    parser.add_argument(
+        "--metric_for_best_model",
+        type=str,
+        default="eval_loss",
+        help="Metric for best model selection",
+    )
+    parser.add_argument(
+        "--greater_is_better",
+        action="store_true",
+        help="Whether higher metric is better",
+    )
 
     # Additional options
-    parser.add_argument("--resume_from_checkpoint", type=str, default=None,
-                       help="Resume training from checkpoint")
-    parser.add_argument("--use_wandb", action="store_true",
-                       help="Use Weights & Biases for logging")
-    parser.add_argument("--wandb_project", type=str, default="sft-training",
-                       help="Weights & Biases project name")
-    parser.add_argument("--convert_to_gguf", action="store_true",
-                       help="Convert final model to GGUF format")
-    parser.add_argument("--gguf_quantization", type=str, default="q4_0",
-                       help="GGUF quantization type")
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        type=str,
+        default=None,
+        help="Resume training from checkpoint",
+    )
+    parser.add_argument(
+        "--use_wandb", action="store_true", help="Use Weights & Biases for logging"
+    )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default="sft-training",
+        help="Weights & Biases project name",
+    )
+    parser.add_argument(
+        "--convert_to_gguf",
+        action="store_true",
+        help="Convert final model to GGUF format",
+    )
+    parser.add_argument(
+        "--gguf_quantization", type=str, default="q4_0", help="GGUF quantization type"
+    )
 
     # Hugging Face Hub upload options
-    parser.add_argument("--push_to_hub", action="store_true",
-                       help="Upload the fine-tuned model to Hugging Face Hub")
-    parser.add_argument("--hub_repo_id", type=str, default=None,
-                       help="Repository ID for Hugging Face Hub (e.g., 'username/model-name')")
-    parser.add_argument("--hub_commit_message", type=str, default=None,
-                       help="Commit message for Hub upload")
-    parser.add_argument("--hub_private", action="store_true",
-                       help="Create private repository on Hub")
-    parser.add_argument("--hub_token", type=str, default=None,
-                       help="Hugging Face authentication token (or set HF_TOKEN env var)")
-    parser.add_argument("--push_adapter_only", action="store_true",
-                       help="Only upload LoRA adapter files to Hub (not the full model)")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the fine-tuned model to Hugging Face Hub",
+    )
+    parser.add_argument(
+        "--hub_repo_id",
+        type=str,
+        default=None,
+        help="Repository ID for Hugging Face Hub (e.g., 'username/model-name')",
+    )
+    parser.add_argument(
+        "--hub_commit_message",
+        type=str,
+        default=None,
+        help="Commit message for Hub upload",
+    )
+    parser.add_argument(
+        "--hub_private", action="store_true", help="Create private repository on Hub"
+    )
+    parser.add_argument(
+        "--hub_token",
+        type=str,
+        default=None,
+        help="Hugging Face authentication token (or set HF_TOKEN env var)",
+    )
+    parser.add_argument(
+        "--push_adapter_only",
+        action="store_true",
+        help="Only upload LoRA adapter files to Hub (not the full model)",
+    )
 
     args = parser.parse_args()
 
@@ -993,7 +1160,7 @@ def main():
         model_name_or_path=args.model_name_or_path,
         use_auth_token=args.use_auth_token,
         trust_remote_code=args.trust_remote_code,
-        torch_dtype=args.torch_dtype
+        torch_dtype=args.torch_dtype,
     )
 
     data_args = DataArguments(
@@ -1002,7 +1169,7 @@ def main():
         max_seq_length=args.max_seq_length,
         instruction_template=args.instruction_template,
         validation_split=args.validation_split,
-        auto_detect_format=args.auto_detect_format
+        auto_detect_format=args.auto_detect_format,
     )
 
     quant_args = QuantizationArguments(
@@ -1010,7 +1177,7 @@ def main():
         use_8bit=args.use_8bit,
         bnb_4bit_compute_dtype=args.bnb_4bit_compute_dtype,
         bnb_4bit_quant_type=args.bnb_4bit_quant_type,
-        bnb_4bit_use_double_quant=args.bnb_4bit_use_double_quant
+        bnb_4bit_use_double_quant=args.bnb_4bit_use_double_quant,
     )
 
     lora_args = LoRAArguments(
@@ -1018,7 +1185,7 @@ def main():
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        lora_bias=args.lora_bias
+        lora_bias=args.lora_bias,
     )
 
     # Initialize Weights & Biases if requested
@@ -1026,7 +1193,7 @@ def main():
         wandb.init(
             project=args.wandb_project,
             config=vars(args),
-            name=f"sft-{Path(args.model_name_or_path).name}-{Path(args.dataset_name_or_path).name}"
+            name=f"sft-{Path(args.model_name_or_path).name}-{Path(args.dataset_name_or_path).name}",
         )
 
     # Set up training arguments
@@ -1043,7 +1210,6 @@ def main():
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
         eval_steps=args.eval_steps,
-        evaluation_strategy="steps" if args.validation_split > 0 else "no",
         save_strategy="steps",
         save_total_limit=args.save_total_limit,
         load_best_model_at_end=args.load_best_model_at_end,
@@ -1083,7 +1249,7 @@ def main():
             tokenizer,
             data_args.max_seq_length,
             data_args.instruction_template,
-            data_args.auto_detect_format
+            data_args.auto_detect_format,
         )
 
         eval_dataset = None
@@ -1093,7 +1259,7 @@ def main():
                 tokenizer,
                 data_args.max_seq_length,
                 data_args.instruction_template,
-                data_args.auto_detect_format
+                data_args.auto_detect_format,
             )
 
         # Create data collator
@@ -1109,7 +1275,7 @@ def main():
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             training_args=training_args,
-            data_collator=data_collator
+            data_collator=data_collator,
         )
 
         # Resume from checkpoint if specified
@@ -1145,7 +1311,7 @@ def main():
                     commit_message=args.hub_commit_message,
                     private=args.hub_private,
                     token=args.hub_token,
-                    push_adapter_only=args.push_adapter_only
+                    push_adapter_only=args.push_adapter_only,
                 )
             except Exception as e:
                 logger.error(f"Failed to upload to Hub: {e}")
