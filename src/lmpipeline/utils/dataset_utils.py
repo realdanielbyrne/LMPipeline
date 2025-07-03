@@ -5,6 +5,9 @@ Shared dataset utilities for automatic format detection and conversion.
 import logging
 from typing import Any, Dict, List
 
+import torch
+from torch.utils.data import Dataset
+
 logger = logging.getLogger(__name__)
 
 
@@ -200,3 +203,99 @@ class DatasetFormatter:
             # Last resort: concatenate all fields
             combined_text = " ".join(str(item[key]) for key in format_keys)
             return {"text": combined_text}
+
+
+class InstructionDataset(Dataset):
+    """Enhanced dataset class for instruction-following data with automatic format detection."""
+
+    def __init__(
+        self,
+        data: List[Dict[str, Any]],
+        tokenizer: Any,
+        max_length: int = 2048,
+        instruction_template: str = "### Instruction:\n{instruction}\n\n### Response:\n{response}",
+        auto_detect_format: bool = True,
+    ):
+        self.data = data
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.instruction_template = instruction_template
+        self.auto_detect_format = auto_detect_format
+
+        # Set pad token if not exists
+        if getattr(tokenizer, "pad_token", None) is None:
+            eos_token = getattr(tokenizer, "eos_token", None)
+            if eos_token is not None:
+                tokenizer.pad_token = eos_token
+
+        # Detect and log dataset format
+        if self.auto_detect_format and data:
+            self.detected_format = DatasetFormatter.detect_format(data)
+            logger.info(f"Detected dataset format: {self.detected_format}")
+
+            # Convert first sample to show the transformation
+            if len(data) > 0:
+                sample_converted = DatasetFormatter.convert_to_standard_format(
+                    data[0], self.detected_format
+                )
+                logger.info(f"Sample conversion: {data[0]} -> {sample_converted}")
+        else:
+            self.detected_format = None
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        item = self.data[idx]
+
+        # Convert to standard format if auto-detection is enabled
+        if self.auto_detect_format and self.detected_format:
+            try:
+                converted_item = DatasetFormatter.convert_to_standard_format(
+                    item, self.detected_format
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to convert item {idx}: {e}. Using original format."
+                )
+                converted_item = item
+        else:
+            converted_item = item
+
+        # Format the text
+        if "instruction" in converted_item and "response" in converted_item:
+            text = self.instruction_template.format(
+                instruction=converted_item["instruction"],
+                response=converted_item["response"],
+            )
+        elif "text" in converted_item:
+            text = converted_item["text"]
+        else:
+            # Fallback for legacy behavior
+            if "instruction" in item and "response" in item:
+                text = self.instruction_template.format(
+                    instruction=item["instruction"], response=item["response"]
+                )
+            elif "text" in item:
+                text = item["text"]
+            else:
+                raise ValueError(
+                    f"Dataset item {idx} must contain either 'instruction'+'response' or 'text' fields. "
+                    f"Available keys: {list(item.keys())}"
+                )
+
+        # Tokenize
+        encoding = self.tokenizer.__call__(
+            text,
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
+        input_ids = encoding["input_ids"].squeeze()
+        attention_mask = encoding["attention_mask"].squeeze()
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": input_ids.clone(),
+        }

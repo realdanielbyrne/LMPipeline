@@ -40,34 +40,23 @@ pip install -e .
 ### Basic Usage
 
 ```bash
-python -m lmpipeline.sft_trainer \
+python -m lmpipeline \
+    --config configs/sft_only_config.yaml \
     --model_name_or_path microsoft/DialoGPT-small \
-    --dataset_name_or_path tatsu-lab/alpaca \
-    --output_dir ./outputs/my_model \
-    --num_train_epochs 3 \
-    --per_device_train_batch_size 4 \
-    --learning_rate 2e-4
+    --output_dir ./outputs/my_model
 ```
 
-### Advanced Usage with LoRA
+### Advanced Multi-Stage Pipeline
 
 ```bash
-python -m lmpipeline.sft_trainer \
+python -m lmpipeline \
+    --config configs/pipeline_config.yaml \
     --model_name_or_path meta-llama/Llama-2-7b-hf \
-    --dataset_name_or_path ./data/instructions.jsonl \
-    --output_dir ./outputs/llama_sft \
-    --use_4bit \
-    --lora_r 16 \
-    --lora_alpha 32 \
-    --lora_dropout 0.1 \
-    --num_train_epochs 3 \
-    --per_device_train_batch_size 1 \
-    --gradient_accumulation_steps 8 \
-    --learning_rate 1e-4 \
-    --max_seq_length 2048 \
-    --validation_split 0.1 \
-    --use_wandb \
-    --convert_to_gguf
+    --output_dir ./outputs/llama_pipeline \
+    --stages sft dpo \
+    --convert_to_gguf \
+    --push_to_hub \
+    --hub_repo_id your-username/my-model
 ```
 
 ## Command Line Arguments

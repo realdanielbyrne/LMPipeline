@@ -110,7 +110,7 @@ Once a format is detected, the system converts it to a standardized instruction-
 ### Basic Usage
 
 ```python
-from lmpipeline.sft_trainer import InstructionDataset
+from lmpipeline.utils.dataset_utils import InstructionDataset
 from transformers import AutoTokenizer
 
 # Load your data (any supported format)
@@ -143,16 +143,13 @@ dataset = InstructionDataset(
 ### Command Line Usage
 
 ```bash
-# Auto-detection is enabled by default
-python -m lmpipeline.sft_trainer \
-    --dataset_name_or_path your_dataset.jsonl \
+# Auto-detection is enabled by default in SFT stage
+python -m lmpipeline \
+    --config configs/sft_config.yaml \
     --model_name_or_path your_model
 
-# Explicitly disable auto-detection
-python -m lmpipeline.sft_trainer \
-    --dataset_name_or_path your_dataset.jsonl \
-    --model_name_or_path your_model \
-    --no_auto_detect_format
+# Configure dataset format detection in your config file
+# Set auto_detect_format: false in the SFT stage configuration
 ```
 
 ## Configuration Options

@@ -207,8 +207,8 @@ def example_post_training_upload():
 
     upload_script = """
 #!/usr/bin/env python3
-from lmpipeline.sft_trainer import upload_to_hub
-from transformers import AutoTokenizer
+# Note: Hub upload functionality is now integrated into the pipeline
+# Use the pipeline with --push_to_hub flag instead
 
 # Load the tokenizer
 tokenizer = AutoTokenizer.from_pretrained("./outputs/final_model")

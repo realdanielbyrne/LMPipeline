@@ -278,7 +278,7 @@ class SFTStage(BaseStage):
         self, data: List[Dict[str, Any]], tokenizer: Any
     ) -> Dataset:
         """Create instruction dataset from data."""
-        from ..sft_trainer import InstructionDataset
+        from ..utils.dataset_utils import InstructionDataset
 
         return InstructionDataset(
             data=data,

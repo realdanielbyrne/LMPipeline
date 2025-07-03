@@ -6,52 +6,95 @@ authors = [
     {name = "Daniel Byrne",email = "realdanielbyrne@icloud.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
-    "datasets>=2.14.0",
-    "accelerate>=0.24.0",
-    "peft>=0.6.0",
+
+
+
     "trl>=0.7.0",
     "huggingface_hub>=0.19.0",
-    "numpy>=1.24.0",
+
     "pandas>=2.0.0",
-    "tqdm>=4.65.0",
-    "wandb>=0.15.0",
+
+
+
     "tensorboard>=2.14.0",
     "packaging>=23.0",
     "psutil>=5.9.0",
+    
     "safetensors>=0.4.0",
     "PyYAML>=6.0",
-    "torch (>=2.0.0,<2.5.0)",
-    "transformers[torch] (>=4.35.0)",
+    
+    
+
+    # Core ML frameworks with cross-platform support
+    # Note: PyTorch should be installed with platform-specific CUDA/CPU versions
+    # Use: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 (for CUDA)
+    # Or: pip install torch torchvision torchaudio (for CPU/MPS on Apple Silicon)
+    "torch>=2.4.0,<2.8.0",  # PyTorch with MPS support for Apple Silicon and CUDA support
+    "torchvision>=0.19.0",  # Vision utilities (optional for most LM tasks)
+    "torchaudio>=2.4.0",    # Audio utilities (optional for most LM tasks)
+
+    # Hugging Face ecosystem - updated to latest compatible versions
+    "transformers>=4.45.0,<5.0.0",  # Core transformers library with latest features
+    "datasets>=2.18.0",             # Dataset loading and processing
+    "tokenizers>=0.19.0",           # Fast tokenizers
+    "accelerate>=0.30.0",           # Training acceleration with multi-backend support
+    "peft>=0.10.0",                 # Parameter-efficient fine-tuning (LoRA/QLoRA)
+
+    # Model hub and experiment tracking
+    "huggingface-hub>=0.22.0",      # Model hub integration
+    "wandb>=0.16.0",                # Experiment tracking
+
+    # Utilities
+    "tqdm>=4.65.0",                 # Progress bars
+    "pyyaml>=6.0",                  # YAML configuration files
+    "numpy>=1.24.0,<2.0.0",        # Numerical computing
+    "scipy>=1.10.0",                # Scientific computing
+
+    # Development and testing
+    "pytest>=7.0.0",               # Testing framework
+    "black>=23.0.0",               # Code formatting
+    "isort>=5.12.0",               # Import sorting
+    "mypy>=1.0.0",                 # Type checking    
 ]
 
 [project.optional-dependencies]
+# Quantization support (CUDA only, not available on Apple Silicon ARM64)
 quantization = [
     "bitsandbytes>=0.46.0; platform_machine != 'arm64'",
 ]
 
 # Platform-specific dependencies for optimal performance
 cuda = [
-    # Windows CUDA support - install PyTorch with CUDA
-    # Use: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    # CUDA support for Windows/Linux with NVIDIA GPUs
+    # Install PyTorch with CUDA: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    # Note: Supports RTX 5090 and newer GPUs (may show compatibility warnings but functional)
     "bitsandbytes>=0.46.0; platform_machine != 'arm64'",
 ]
 
 apple-silicon = [
-    # Apple Silicon (M1/M2/M3) optimized dependencies
-    # PyTorch with Metal Performance Shaders (MPS) support
-    # Note: bitsandbytes not supported on ARM64, use alternative quantization
+    # Apple Silicon (M1/M2/M3/M4) optimized dependencies
+    # PyTorch with Metal Performance Shaders (MPS) support is included in base dependencies
+    # Note: bitsandbytes not supported on ARM64 - quantization gracefully disabled
+    # Alternative quantization methods can be added here in the future
 ]
 
-# Complete installation with all optional features
+# Development and testing dependencies
+dev = [
+    "pytest>=8.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+]
+
+# Complete installation with all optional features (excludes ARM64-incompatible packages)
 all = [
     "bitsandbytes>=0.46.0; platform_machine != 'arm64'",
 ]
 
 [project.scripts]
-lmpipeline-train = "lmpipeline.sft_trainer:main"
-lmpipeline-pipeline = "lmpipeline.pipeline_main:main"
+lmpipeline = "lmpipeline.pipeline_main:main"
 
 [tool.poetry]
 packages = [{include = "lmpipeline", from = "src"}]

@@ -5,7 +5,8 @@ Shared model utilities for quantization, LoRA setup, and model management.
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+import platform
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -22,6 +23,149 @@ from peft import (
 logger = logging.getLogger(__name__)
 
 
+def get_optimal_device() -> Tuple[torch.device, str]:
+    """
+    Detect and return the optimal device for training/inference.
+
+    Handles compatibility warnings (e.g., RTX 5090 sm_120 compute capability)
+    and provides graceful fallbacks.
+
+    Returns:
+        Tuple of (device, device_name) where device_name is human-readable
+    """
+    try:
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            try:
+                # This may trigger warnings for newer GPUs like RTX 5090
+                device_name = f"CUDA ({torch.cuda.get_device_name()})"
+                capability = torch.cuda.get_device_capability()
+
+                # Check for newer compute capabilities that may have warnings
+                if capability[0] >= 12:  # sm_120 and above
+                    logger.info(
+                        f"Using CUDA device: {device_name} (Compute Capability: sm_{capability[0]}{capability[1]})"
+                    )
+                    logger.info(
+                        "Note: Newer GPU detected - some PyTorch features may show compatibility warnings but device is usable"
+                    )
+                else:
+                    logger.info(f"Using CUDA device: {device_name}")
+
+            except Exception as e:
+                # Fallback if device name detection fails
+                device_name = "CUDA (Unknown GPU)"
+                logger.warning(f"Could not get CUDA device name: {e}")
+
+            return device, device_name
+
+    except Exception as e:
+        logger.warning(f"Error checking CUDA availability: {e}")
+
+    try:
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = torch.device("mps")
+            device_name = "Apple Silicon MPS"
+            logger.info(f"Using MPS device: {device_name}")
+            return device, device_name
+    except Exception as e:
+        logger.warning(f"Error checking MPS availability: {e}")
+
+    # Fallback to CPU
+    device = torch.device("cpu")
+    try:
+        device_name = f"CPU ({platform.processor()})"
+    except Exception:
+        device_name = "CPU (Unknown)"
+    logger.info(f"Using CPU device: {device_name}")
+    return device, device_name
+
+
+def is_quantization_supported() -> bool:
+    """
+    Check if quantization (BitsAndBytes) is supported on current platform.
+
+    Returns:
+        True if quantization is supported, False otherwise
+    """
+    try:
+        import bitsandbytes
+
+        # BitsAndBytes requires CUDA and is not supported on ARM64 (Apple Silicon)
+        if torch.cuda.is_available() and platform.machine().lower() != "arm64":
+            logger.info("Quantization (BitsAndBytes) is supported")
+            return True
+        else:
+            if platform.machine().lower() == "arm64":
+                logger.info(
+                    "BitsAndBytes not supported on ARM64 (Apple Silicon) - quantization disabled"
+                )
+            else:
+                logger.warning(
+                    "Quantization (BitsAndBytes) requires CUDA - not available on this platform"
+                )
+            return False
+    except ImportError as e:
+        logger.warning(f"BitsAndBytes not installed - quantization not available: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Error checking quantization support: {e}")
+        return False
+
+
+def get_recommended_dtype(torch_dtype: Optional[str] = None) -> torch.dtype:
+    """
+    Get the recommended torch dtype based on the current device or user specification.
+
+    Args:
+        torch_dtype: Optional dtype specification. Can be "auto", "float16", "bfloat16", "float32", or None
+
+    Returns:
+        Recommended torch dtype
+    """
+    # Handle automatic dtype selection
+    if torch_dtype is None or torch_dtype == "auto":
+        device, _ = get_optimal_device()
+
+        if device.type == "cuda":
+            # CUDA supports bfloat16 on modern GPUs
+            try:
+                if torch.cuda.is_bf16_supported():
+                    logger.info("Using bfloat16 for CUDA (auto-detected)")
+                    return torch.bfloat16
+                else:
+                    logger.info("Using float16 for CUDA (auto-detected)")
+                    return torch.float16
+            except Exception as e:
+                logger.warning(
+                    f"Error checking CUDA bf16 support: {e}, falling back to float16"
+                )
+                return torch.float16
+        elif device.type == "mps":
+            # MPS works well with float16
+            logger.info("Using float16 for MPS (auto-detected)")
+            return torch.float16
+        else:
+            # CPU typically uses float32
+            logger.info("Using float32 for CPU (auto-detected)")
+            return torch.float32
+
+    # Handle explicit dtype specification
+    dtype_mapping = {
+        "float16": torch.float16,
+        "bfloat16": torch.bfloat16,
+        "float32": torch.float32,
+    }
+
+    if torch_dtype in dtype_mapping:
+        selected_dtype = dtype_mapping[torch_dtype]
+        logger.info(f"Using {torch_dtype} (user-specified)")
+        return selected_dtype
+    else:
+        logger.warning(f"Unknown dtype '{torch_dtype}', falling back to auto-detection")
+        return get_recommended_dtype("auto")
+
+
 def load_quantization_config(
     use_4bit: bool = True,
     use_8bit: bool = False,
@@ -29,8 +173,19 @@ def load_quantization_config(
     bnb_4bit_quant_type: str = "nf4",
     bnb_4bit_use_double_quant: bool = True,
 ) -> Optional[BitsAndBytesConfig]:
-    """Load quantization configuration."""
+    """
+    Load quantization configuration with cross-platform support.
+
+    Automatically disables quantization on platforms that don't support it (e.g., Apple Silicon).
+    """
     if not (use_4bit or use_8bit):
+        return None
+
+    # Check if quantization is supported on current platform
+    if not is_quantization_supported():
+        logger.warning(
+            "Quantization requested but not supported on this platform - disabling"
+        )
         return None
 
     if use_8bit:
@@ -131,7 +286,7 @@ def load_dataset_from_path(
         logger.info(f"Loading dataset from HuggingFace hub: {dataset_name_or_path}")
         dataset = load_dataset(dataset_name_or_path, dataset_config_name, split="train")
         data = [item for item in dataset]
-    
+
     logger.info(f"Loaded {len(data)} examples")
     return data  # type: ignore
 
@@ -151,9 +306,7 @@ def split_dataset(
     return train_data, val_data
 
 
-def save_model_and_tokenizer(
-    model: Any, tokenizer: Any, output_dir: str
-) -> None:
+def save_model_and_tokenizer(model: Any, tokenizer: Any, output_dir: str) -> None:
     """Save the fine-tuned model and tokenizer."""
     logger.info(f"Saving model to {output_dir}")
 

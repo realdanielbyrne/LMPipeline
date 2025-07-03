@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-from lmpipeline.sft_trainer import upload_to_hub
-from transformers import AutoTokenizer
+# Note: upload_to_hub functionality is now part of the pipeline post-processing
+# Use the pipeline with --push_to_hub flag instead
 
-# Load the tokenizer
-tokenizer = AutoTokenizer.from_pretrained("./outputs/final_model")
+# Example: Use the pipeline with Hub upload
+# python -m lmpipeline \
+#     --config configs/sft_only_config.yaml \
+#     --model_name_or_path ./outputs/final_model \
+#     --push_to_hub \
+#     --hub_repo_id your-username/my-fine-tuned-model \
+#     --hub_commit_message "Upload fine-tuned model" \
+#     --hub_private false
 
-# Upload to Hub
-upload_to_hub(
-    model_path="./outputs/final_model",
-    tokenizer=tokenizer,
-    repo_id="your-username/my-fine-tuned-model",
-    commit_message="Upload fine-tuned model",
-    private=False,
-    push_adapter_only=False  # Set to True for LoRA adapters only
+print("Use the pipeline with --push_to_hub flag for model uploads")
+print("Example command:")
+print(
+    "python -m lmpipeline --config configs/sft_only_config.yaml --push_to_hub --hub_repo_id your-username/model"
 )

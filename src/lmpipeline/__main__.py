@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Entry point for running the SFT trainer as a module.
+Entry point for running the LM Pipeline as a module.
 
 Usage:
-    python -m lmpipeline.sft_trainer [arguments]
-    python -m lmpipeline [arguments]  # This file enables this shortcut
+    python -m lmpipeline [arguments]
 """
 
-from .sft_trainer import main
+from .pipeline_main import main
 
 if __name__ == "__main__":
     main()

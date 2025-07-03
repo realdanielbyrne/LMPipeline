@@ -24,6 +24,9 @@ A production-ready Python framework for supervised fine-tuning of functional net
 - **💾 Memory Optimization**: Gradient checkpointing and memory-saving techniques
 - **⚙️ Configuration Management**: YAML configuration file support
 - **🤗 Hub Integration**: Seamless upload to Hugging Face Hub with authentication handling
+- **🔧 Cross-Platform Compatibility**: Automatic device detection and optimization for CUDA, Apple Silicon MPS, and CPU
+- **🎯 Automatic Dtype Selection**: Smart precision selection based on hardware capabilities
+- **⚡ Graceful Fallbacks**: Automatic quantization disabling on unsupported platforms
 
 ## 📦 Installation
 
@@ -64,11 +67,15 @@ python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 - CUDA 11.8 or 12.1+ installed
 - Latest NVIDIA drivers
 
-**Note for RTX 40-series (RTX 4090, RTX 5090):** These GPUs may require PyTorch nightly builds for full compatibility:
+**Note for RTX 40/50-series (RTX 4090, RTX 5090):** These GPUs work with current PyTorch but may show compatibility warnings:
 
 ```bash
-pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124
+# RTX 5090 users may see warnings about sm_120 compute capability
+# The device is still detected and usable despite the warning
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
+
+**RTX 5090 Compatibility:** The RTX 5090 with sm_120 compute capability shows a compatibility warning with PyTorch 2.5.1, but the device is fully functional for training and inference.
 
 #### 🍎 Apple Silicon (M1/M2/M3/M4)
 
@@ -94,10 +101,11 @@ python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available
 
 **Apple Silicon Notes:**
 
-- BitsAndBytes quantization is not supported on ARM64
-- Use alternative quantization methods or run models in FP16
+- BitsAndBytes quantization is automatically disabled on ARM64 (graceful fallback)
+- Automatic dtype selection chooses optimal precision for MPS
 - MPS acceleration provides significant speedup over CPU
-- Memory is shared between CPU and GPU
+- Memory is shared between CPU and GPU (unified memory architecture)
+- Cross-platform utilities automatically detect and configure MPS support
 
 #### 🐧 Linux with CUDA
 
@@ -151,38 +159,48 @@ poetry run pip install torch torchvision torchaudio --index-url https://download
 poetry shell
 ```
 
-## 🚀 Quick Start
+### 🔧 Cross-Platform Features
 
-### Basic Training
+LMPipeline includes automatic cross-platform compatibility features:
 
-```bash
-python -m lmpipeline.sft_trainer \
-    --model_name_or_path microsoft/DialoGPT-small \
-    --dataset_name_or_path tatsu-lab/alpaca \
-    --output_dir ./outputs/my_model \
-    --num_train_epochs 3 \
-    --per_device_train_batch_size 4 \
-    --learning_rate 2e-4
+- **Automatic Device Detection**: Detects CUDA, MPS, or CPU and selects optimal device
+- **Smart Dtype Selection**: Automatically chooses bfloat16/float16/float32 based on hardware
+- **Graceful Quantization Fallback**: Disables BitsAndBytes on unsupported platforms (ARM64)
+- **Platform-Aware Error Handling**: Handles RTX 5090 compatibility warnings and import errors
+
+```python
+from lmpipeline.utils.model_utils import get_optimal_device, get_recommended_dtype
+
+# Automatic device and dtype detection
+device, device_name = get_optimal_device()
+dtype = get_recommended_dtype("auto")  # or specify "float16", "bfloat16", "float32"
+
+print(f"Using device: {device} ({device_name})")
+print(f"Recommended dtype: {dtype}")
 ```
 
-### Advanced Training with LoRA
+## 🚀 Quick Start
+
+### Basic SFT Training
 
 ```bash
-python -m lmpipeline.sft_trainer \
+python -m lmpipeline \
+    --config configs/sft_only_config.yaml \
+    --model_name_or_path microsoft/DialoGPT-small \
+    --output_dir ./outputs/my_model
+```
+
+### Advanced Multi-Stage Pipeline
+
+```bash
+python -m lmpipeline \
+    --config configs/pipeline_config.yaml \
     --model_name_or_path meta-llama/Llama-2-7b-hf \
-    --dataset_name_or_path ./examples/sample_data.jsonl \
-    --output_dir ./outputs/llama_sft \
-    --use_4bit \
-    --lora_r 16 \
-    --lora_alpha 32 \
-    --num_train_epochs 3 \
-    --per_device_train_batch_size 1 \
-    --gradient_accumulation_steps 8 \
-    --learning_rate 1e-4 \
-    --max_seq_length 2048 \
-    --validation_split 0.1 \
-    --use_wandb \
-    --convert_to_gguf
+    --output_dir ./outputs/llama_pipeline \
+    --stages sft dpo \
+    --convert_to_gguf \
+    --push_to_hub \
+    --hub_repo_id your-username/my-model
 ```
 
 ### 🔗 Modular Pipeline Usage Examples
@@ -235,10 +253,10 @@ stage_configs:
     teacher_model_type: "api"
 ```
 
-### Using Configuration Files (Stand alone SFT)
+### Using Configuration Files
 
 ```bash
-python -m lmpipeline.sft_trainer --config configs/llama_7b_config.yaml
+python -m lmpipeline --config configs/sft_only_config.yaml
 ```
 
 ## 🎯 Supported Models
@@ -317,16 +335,13 @@ LM Pipeline supports **automatic dataset format detection and conversion**! You 
 The system automatically detects your dataset format and converts it to a standardized format:
 
 ```bash
-# Auto-detection is enabled by default
-python -m lmpipeline.sft_trainer \
-    --dataset_name_or_path your_dataset.jsonl \
+# Auto-detection is enabled by default in SFT stage
+python -m lmpipeline \
+    --config configs/sft_config.yaml \
     --model_name_or_path your_model
 
-# Disable auto-detection if needed
-python -m lmpipeline.sft_trainer \
-    --dataset_name_or_path your_dataset.jsonl \
-    --model_name_or_path your_model \
-    --no_auto_detect_format
+# Configure dataset format detection in your config file
+# See configs/sft_only_config.yaml for examples
 ```
 
 ### JSONL Format
