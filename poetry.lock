@@ -3264,9 +3264,10 @@ propcache = ">=0.2.1"
 all = ["bitsandbytes"]
 apple-silicon = []
 cuda = ["bitsandbytes"]
+dev = ["black", "isort", "mypy", "pytest"]
 quantization = ["bitsandbytes"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "10043fb7d412cc7bd0e44b9fe94fe760082d96e9ff4c199881e3cbb7c1a17134"
+content-hash = "fba468017c790e764fa2b7dd8427651aab632645369d0c1a0c8187e5f8599306"
