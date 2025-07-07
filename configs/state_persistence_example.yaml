@@ -1,0 +1,115 @@
+# Example Configuration with Training State Persistence
+# This configuration demonstrates the training state persistence system
+
+# Model configuration
+model_name_or_path: "microsoft/DialoGPT-medium"
+use_auth_token: false
+trust_remote_code: false
+torch_dtype: "float16"
+
+# Pipeline configuration
+output_dir: "./outputs/state_persistence_demo"
+stages:
+  - "sft"
+  - "dpo"
+
+# Training state persistence configuration
+enable_state_persistence: true    # Enable state tracking and recovery
+auto_resume: true                 # Automatically resume from checkpoints
+force_restart: false             # Set to true to ignore existing state
+
+# Global settings
+save_final_model: true
+cleanup_intermediate: false
+log_level: "INFO"
+
+# Stage-specific configurations
+stage_configs:
+  sft:
+    # Dataset configuration
+    dataset_name_or_path: "examples/sample_data.jsonl"
+    max_seq_length: 1024
+    instruction_template: "### Instruction:\n{instruction}\n\n### Response:\n{response}"
+    validation_split: 0.1
+    auto_detect_format: true
+    
+    # Quantization configuration
+    use_4bit: true
+    use_8bit: false
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_use_double_quant: true
+    
+    # LoRA configuration
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    lora_target_modules: null  # Auto-detect
+    lora_bias: "none"
+    
+    # Training configuration
+    num_train_epochs: 3
+    per_device_train_batch_size: 4
+    per_device_eval_batch_size: 4
+    gradient_accumulation_steps: 1
+    learning_rate: 2e-4
+    weight_decay: 0.01
+    warmup_ratio: 0.03
+    lr_scheduler_type: "cosine"
+    
+    # Checkpointing for state persistence
+    logging_steps: 10
+    save_steps: 100              # Save checkpoint every 100 steps
+    eval_steps: 100
+    save_total_limit: 3          # Keep 3 most recent checkpoints
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_loss"
+    greater_is_better: false
+    
+    # Weights & Biases integration
+    use_wandb: true
+    wandb_project: "lmpipeline-state-persistence"
+    wandb_run_name: "sft-demo"
+    
+  dpo:
+    # Dataset configuration
+    dataset_name_or_path: "examples/sample_dpo_data.jsonl"
+    max_seq_length: 1024
+    validation_split: 0.1
+    
+    # DPO-specific configuration
+    beta: 0.1
+    loss_type: "sigmoid"
+    
+    # LoRA configuration (inherited from SFT)
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    
+    # Training configuration
+    num_train_epochs: 2
+    per_device_train_batch_size: 2
+    per_device_eval_batch_size: 2
+    gradient_accumulation_steps: 2
+    learning_rate: 5e-5
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    lr_scheduler_type: "linear"
+    
+    # Checkpointing for state persistence
+    logging_steps: 10
+    save_steps: 50               # More frequent saves for DPO
+    eval_steps: 50
+    save_total_limit: 5
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_loss"
+    greater_is_better: false
+    
+    # Weights & Biases integration
+    use_wandb: true
+    wandb_project: "lmpipeline-state-persistence"
+    wandb_run_name: "dpo-demo"
+
+# Post-processing configuration
+convert_to_gguf: false
+push_to_hub: false

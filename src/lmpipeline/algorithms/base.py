@@ -37,6 +37,14 @@ class StageConfig:
     use_wandb: bool = field(
         default=False, metadata={"help": "Use Weights & Biases logging"}
     )
+
+    # State tracking
+    state_manager: Optional[Any] = field(
+        default=None, metadata={"help": "Training state manager instance"}
+    )
+    wandb_logger: Optional[Any] = field(
+        default=None, metadata={"help": "W&B logger instance"}
+    )
     wandb_project: str = field(
         default="lmpipeline", metadata={"help": "W&B project name"}
     )
@@ -178,3 +186,34 @@ class BaseStage(ABC):
             import wandb
 
             wandb.finish()
+
+    def update_progress(
+        self,
+        current_epoch: Optional[int] = None,
+        current_step: Optional[int] = None,
+        metrics: Optional[Dict[str, Any]] = None,
+        checkpoint_path: Optional[str] = None,
+    ) -> None:
+        """Update training progress in state manager."""
+        if hasattr(self.config, "state_manager") and self.config.state_manager:
+            self.config.state_manager.update_stage_progress(
+                stage_name=self.stage_name,
+                current_epoch=current_epoch,
+                current_step=current_step,
+                metrics=metrics,
+                checkpoint_path=checkpoint_path,
+            )
+
+        # Also log to W&B if available
+        if (
+            hasattr(self.config, "wandb_logger")
+            and self.config.wandb_logger
+            and metrics
+        ):
+            self.config.wandb_logger.log_metrics(metrics, step=current_step)
+
+    def get_resume_checkpoint(self) -> Optional[str]:
+        """Get checkpoint path for resuming training."""
+        if hasattr(self.config, "state_manager") and self.config.state_manager:
+            return self.config.state_manager.get_stage_checkpoint(self.stage_name)
+        return None

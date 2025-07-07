@@ -32,6 +32,16 @@ From rapid research prototyping on consumer hardware with 4-bit quantization to 
 - **🎯 Automatic Dtype Selection**: Smart precision selection based on hardware capabilities
 - **⚡ Graceful Fallbacks**: Automatic quantization disabling on unsupported platforms
 
+### 💾 Training State Persistence
+
+- **🔄 Automatic Recovery**: Resume interrupted training from the last checkpoint
+- **📝 Local Status Tracking**: JSON-based progress logs with human-readable format
+- **☁️ Cloud Integration**: Weights & Biases logging with sensitive path filtering
+- **🔍 Configuration Validation**: Detect configuration changes between runs
+- **📊 Progress Monitoring**: Track epochs, steps, and metrics across stages
+- **🛡️ File Validation**: Verify checkpoint and model file integrity
+- **⚙️ Flexible Control**: Enable/disable persistence or force fresh starts
+
 ## 🧠 Algorithms
 
 LM Pipeline's revolutionary **plugin-based architecture** treats machine learning algorithms as intelligent, composable building blocks that can be seamlessly chained together in configurable training workflows. Each algorithm is implemented as a "stage" that adheres to a standardized interface, enabling automatic model passing, configuration management, and result tracking across the entire pipeline.
@@ -271,6 +281,49 @@ python -m lmpipeline \
     --push_to_hub \
     --hub_repo_id your-username/my-model
 ```
+
+### 💾 Training State Persistence
+
+LMPipeline automatically saves training progress and can resume from interruptions:
+
+```bash
+# Start training with state persistence enabled (default)
+python -m lmpipeline --config configs/state_persistence_example.yaml
+
+# If training is interrupted, simply run the same command again
+# The system will automatically resume from the last checkpoint
+python -m lmpipeline --config configs/state_persistence_example.yaml
+
+# Force a fresh start (ignores existing state)
+python -m lmpipeline --config configs/state_persistence_example.yaml --force_restart
+
+# Disable state persistence entirely
+python -m lmpipeline --config configs/state_persistence_example.yaml --enable_state_persistence false
+```
+
+#### State Persistence Configuration
+
+```yaml
+# Enable/disable state persistence
+enable_state_persistence: true    # Default: true
+auto_resume: true                 # Default: true
+force_restart: false             # Default: false
+
+# Stage-level checkpointing
+stage_configs:
+  sft:
+    save_steps: 100              # Save checkpoint every 100 steps
+    save_total_limit: 3          # Keep 3 most recent checkpoints
+    use_wandb: true              # Log to Weights & Biases
+    wandb_project: "my-project"
+```
+
+The system creates a `training_status.json` file in your output directory that tracks:
+
+- Pipeline progress and current stage
+- Checkpoint locations and model paths
+- Training metrics and timestamps
+- Configuration hash for change detection
 
 ### 🔗 Modular Pipeline Usage Examples
 

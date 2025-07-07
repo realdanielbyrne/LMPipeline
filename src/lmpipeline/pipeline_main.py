@@ -3,7 +3,7 @@
 Main entry point for the modular fine-tuning pipeline.
 
 This script provides a complete solution for multi-stage fine-tuning of language models
-using a configurable pipeline that supports SFT, DPO, RLAIF, RL, and CoT Distillation.
+using a configurable pipeline that supports SFT, DPO, RLAIF, RL, CoT Distillation, and custom algorithm stages.
 
 Author: Daniel Byrne
 License: MIT

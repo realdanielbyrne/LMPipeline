@@ -21,6 +21,8 @@ from .algorithms.rl import RLStage
 from .algorithms.cot_distillation import CoTDistillationStage
 from .utils.post_processing import upload_to_hub, convert_to_gguf
 from .utils.config_defaults import ConfigDefaults
+from .utils.training_state import TrainingStateManager
+from .utils.wandb_integration import create_wandb_logger
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,20 @@ class PipelineConfig:
 
     # Logging
     log_level: str = field(default="INFO", metadata={"help": "Logging level"})
+
+    # Training state persistence
+    enable_state_persistence: bool = field(
+        default=True,
+        metadata={"help": "Enable training state persistence and recovery"},
+    )
+    auto_resume: bool = field(
+        default=True,
+        metadata={"help": "Automatically resume from last checkpoint if available"},
+    )
+    force_restart: bool = field(
+        default=False,
+        metadata={"help": "Force restart training even if state file exists"},
+    )
 
     # Hugging Face Hub upload configuration
     push_to_hub: bool = field(
@@ -153,6 +169,33 @@ class Pipeline:
         # Create output directory
         Path(self.config.output_dir).mkdir(parents=True, exist_ok=True)
 
+        # Initialize training state manager
+        self.state_manager = None
+        if config.enable_state_persistence:
+            self.state_manager = TrainingStateManager(
+                output_dir=config.output_dir,
+                pipeline_config=config.__dict__,
+                enable_persistence=True,
+            )
+
+            # Handle force restart
+            if config.force_restart and self.state_manager.state_file.exists():
+                self.logger.info(
+                    "Force restart requested - removing existing state file"
+                )
+                self.state_manager.state_file.unlink()
+                self.state_manager._create_new_state(config.__dict__)
+
+        # Initialize W&B logger
+        self.wandb_logger = None
+        if config.__dict__.get("use_wandb", False):
+            pipeline_id = (
+                self.state_manager.state.pipeline_id
+                if self.state_manager
+                else "unknown"
+            )
+            self.wandb_logger = create_wandb_logger(config.__dict__, pipeline_id)
+
         # Register default stages first
         self._register_default_stages()
 
@@ -194,6 +237,8 @@ class Pipeline:
                 {
                     "stage_name": stage_name,
                     "output_dir": os.path.join(self.config.output_dir, stage_name),
+                    "state_manager": self.state_manager,
+                    "wandb_logger": self.wandb_logger,
                 }
             )
 
@@ -278,15 +323,73 @@ class Pipeline:
         """Execute the entire pipeline."""
         self.logger.info(f"Starting pipeline execution with {len(self.stages)} stages")
 
+        # Check for resumption
+        resume_point = None
+        if self.config.auto_resume and self.state_manager:
+            if not self.state_manager.validate_file_paths():
+                self.logger.warning(
+                    "Some referenced files no longer exist. Starting fresh."
+                )
+                self.state_manager._create_new_state(self.config.__dict__)
+            else:
+                resume_point = self.state_manager.get_resume_point()
+                if resume_point:
+                    completed_stages = self.state_manager.get_completed_stages()
+                    self.logger.info(
+                        f"Resuming from stage: {resume_point}. "
+                        f"Completed stages: {completed_stages}"
+                    )
+
         # Load initial model and tokenizer
         model, tokenizer = self.load_model_and_tokenizer()
 
         # Execute each stage
         previous_result = None
         for i, stage in enumerate(self.stages):
-            self.logger.info(
-                f"Executing stage {i+1}/{len(self.stages)}: {stage.stage_name}"
-            )
+            stage_name = stage.stage_name
+
+            # Skip completed stages if resuming
+            if (
+                resume_point
+                and self.state_manager
+                and stage_name in self.state_manager.get_completed_stages()
+            ):
+                self.logger.info(f"Skipping completed stage: {stage_name}")
+
+                # Load the result from state
+                if (
+                    self.state_manager.state
+                    and stage_name in self.state_manager.state.stages
+                ):
+                    stage_progress = self.state_manager.state.stages[stage_name]
+                    if stage_progress.model_path and stage_progress.tokenizer_path:
+                        # Create a result object for the completed stage
+                        previous_result = StageResult(
+                            stage_name=stage_name,
+                            success=True,
+                            model_path=stage_progress.model_path,
+                            tokenizer_path=stage_progress.tokenizer_path,
+                            metrics=stage_progress.metrics,
+                        )
+                        self.stage_results.append(previous_result)
+
+                        # Load the model for the next stage
+                        model = AutoModelForCausalLM.from_pretrained(
+                            stage_progress.model_path
+                        )
+                        tokenizer = AutoTokenizer.from_pretrained(
+                            stage_progress.tokenizer_path
+                        )
+                continue
+
+            self.logger.info(f"Executing stage {i+1}/{len(self.stages)}: {stage_name}")
+
+            # Mark stage as started in state manager
+            if self.state_manager:
+                # Extract training parameters for progress tracking
+                stage_config = getattr(stage, "config", None)
+                total_epochs = getattr(stage_config, "num_train_epochs", 0)
+                self.state_manager.start_stage(stage_name, total_epochs=total_epochs)
 
             try:
                 # Prepare model and tokenizer for this stage
@@ -301,26 +404,43 @@ class Pipeline:
                 self.stage_results.append(result)
                 previous_result = result
 
+                # Update state manager
+                if self.state_manager:
+                    if result.success:
+                        self.state_manager.complete_stage(
+                            stage_name,
+                            result.model_path,
+                            result.tokenizer_path,
+                            result.metrics,
+                        )
+                    else:
+                        self.state_manager.fail_stage(
+                            stage_name, result.error_message or "Unknown error"
+                        )
+
                 # Update model and tokenizer for next stage
                 if result.success:
                     # Load the model from the stage output for the next stage
                     model = AutoModelForCausalLM.from_pretrained(result.model_path)
                     tokenizer = AutoTokenizer.from_pretrained(result.tokenizer_path)
 
-                    self.logger.info(f"Stage {stage.stage_name} completed successfully")
+                    self.logger.info(f"Stage {stage_name} completed successfully")
                 else:
                     self.logger.error(
-                        f"Stage {stage.stage_name} failed: {result.error_message}"
+                        f"Stage {stage_name} failed: {result.error_message}"
                     )
                     break
 
             except Exception as e:
-                self.logger.error(
-                    f"Stage {stage.stage_name} failed with exception: {e}"
-                )
+                self.logger.error(f"Stage {stage_name} failed with exception: {e}")
+
+                # Update state manager
+                if self.state_manager:
+                    self.state_manager.fail_stage(stage_name, str(e))
+
                 # Create failure result
                 result = StageResult(
-                    stage_name=stage.stage_name,
+                    stage_name=stage_name,
                     success=False,
                     model_path="",
                     tokenizer_path="",
@@ -350,9 +470,17 @@ class Pipeline:
         if self.stage_results and self.stage_results[-1].success:
             self._run_post_processing(final_model_path)
 
+        # Mark pipeline as completed in state manager
+        if self.state_manager and self.stage_results and self.stage_results[-1].success:
+            self.state_manager.complete_pipeline(final_model_path or "")
+
         # Cleanup intermediate models if requested
         if self.config.cleanup_intermediate:
             self._cleanup_intermediate_models()
+
+        # Finish W&B run if active
+        if self.wandb_logger:
+            self.wandb_logger.finish_run()
 
         self.logger.info("Pipeline execution completed")
         return self.stage_results
