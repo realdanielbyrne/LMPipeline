@@ -1,6 +1,6 @@
-# Supervised Fine-Tuning (SFT) for Quantized Language Models
+# LM Pipeline Documentation
 
-A comprehensive Python script for supervised fine-tuning of quantized language models using modern techniques like LoRA/QLoRA, with support for various model architectures and datasets.
+This directory contains the documentation for the LM Pipeline project.
 
 ## Features
 

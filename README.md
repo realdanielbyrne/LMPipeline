@@ -1,6 +1,10 @@
 # LM Pipeline
 
-A production-ready Python framework for supervised fine-tuning of functional networks on regular and quantized language models using modern parameter-efficient techniques featuring a **modular pipeline architecture** that supports multi-algorithm fine-tuning workflows including SFT, DPO, RLAIF, RL, Chain-of-Thought distillation, or your own algorithm
+**The first truly modular fine-tuning framework that transforms language models into domain experts through composable algorithm orchestration.** LM Pipeline revolutionizes how researchers and practitioners approach model fine-tuning by breaking down the artificial barriers between different training methodologies. Instead of being locked into single-algorithm frameworks, you can now seamlessly chain together Supervised Fine-Tuning, Direct Preference Optimization, Reinforcement Learning from AI Feedback, traditional RL, and Chain-of-Thought Distillation in any combination that serves your specific use case.
+
+What makes LM Pipeline truly groundbreaking is its **plugin-based architecture** that treats each machine learning algorithm as an intelligent, composable building block. Each algorithm implements a standardized interface that enables automatic model passing, configuration management, and result tracking across the entire pipeline. This means you can experiment with novel training sequences like SFT → DPO → RLAIF → CoT Distillation, or develop entirely custom algorithms that integrate seamlessly with existing components—all without touching a single line of core pipeline code.
+
+From rapid research prototyping on consumer hardware with 4-bit quantization to production-scale training on enterprise clusters with 70B+ models, LM Pipeline adapts to your computational constraints while maintaining state-of-the-art performance. The framework eliminates the weeks of custom engineering typically required for multi-stage training workflows, democratizing access to advanced fine-tuning techniques that were previously locked away in research labs. **Your next breakthrough is just a YAML configuration file away.**
 
 ## 🚀 Features
 
@@ -27,6 +31,71 @@ A production-ready Python framework for supervised fine-tuning of functional net
 - **🔧 Cross-Platform Compatibility**: Automatic device detection and optimization for CUDA, Apple Silicon MPS, and CPU
 - **🎯 Automatic Dtype Selection**: Smart precision selection based on hardware capabilities
 - **⚡ Graceful Fallbacks**: Automatic quantization disabling on unsupported platforms
+
+## 🧠 Algorithms
+
+LM Pipeline's revolutionary **plugin-based architecture** treats machine learning algorithms as intelligent, composable building blocks that can be seamlessly chained together in configurable training workflows. Each algorithm is implemented as a "stage" that adheres to a standardized interface, enabling automatic model passing, configuration management, and result tracking across the entire pipeline.
+
+### 🏗️ Plugin Architecture Design
+
+The algorithm plugin system is built around three core components:
+
+- **🔌 Standardized Interface**: All algorithms implement the `BaseStage` abstract class, ensuring consistent behavior and interoperability
+- **📋 Configuration Management**: Each algorithm defines its own `StageConfig` with automatic validation and intelligent defaults
+- **🔄 Result Passing**: Structured data flow between stages via `StageResult` objects containing model paths, metrics, and artifacts
+- **📊 Pipeline Orchestration**: The `Pipeline` class manages execution flow, error handling, and resource management across all stages
+
+### 🎯 Algorithm Chaining & Workflows
+
+The plugin interface enables powerful workflow compositions:
+
+```yaml
+# Example: Complete fine-tuning pipeline
+stages:
+  - "sft"              # Foundation training on instruction data
+  - "dpo"              # Preference alignment with human feedback
+  - "rlaif"            # AI-driven preference optimization
+  - "cot_distillation" # Reasoning capability enhancement
+```
+
+Each stage automatically receives the trained model from the previous stage, enabling sophisticated multi-algorithm training sequences that would typically require weeks of custom engineering.
+
+### 🔧 Extensibility & Custom Development
+
+The standardized plugin interface makes it trivial to develop custom algorithms:
+
+- **🎨 Custom Algorithm Development**: Implement the `BaseStage` interface to create new training methodologies
+- **🔗 Seamless Integration**: Custom algorithms integrate automatically with existing pipeline infrastructure
+- **⚙️ Configuration-Driven**: No code changes needed to use custom algorithms—just update your YAML configuration
+- **🧪 Independent Testing**: Each algorithm is self-contained and independently testable
+
+### 📚 Built-in Algorithm Library
+
+LM Pipeline includes a comprehensive suite of state-of-the-art training algorithms:
+
+#### 🎓 **Supervised Fine-Tuning (SFT)**
+
+Foundation training stage that adapts pre-trained models to instruction-following tasks using supervised learning on curated datasets.
+
+#### 🎯 **Direct Preference Optimization (DPO)**
+
+Advanced alignment technique that directly optimizes model outputs based on human preference data without requiring a separate reward model.
+
+#### 🤖 **Reinforcement Learning from AI Feedback (RLAIF)**
+
+Scalable preference optimization using AI-generated feedback signals, enabling alignment at scale without extensive human annotation.
+
+#### 🎮 **Reinforcement Learning (RL)**
+
+Traditional RL training with reward models, supporting PPO, A2C, and TRPO algorithms for fine-grained policy optimization.
+
+#### 🧠 **Chain-of-Thought Distillation (CoT)**
+
+Knowledge distillation technique that transfers reasoning capabilities from larger teacher models to smaller student models.
+
+### 📖 Algorithm Documentation
+
+Detailed documentation for each algorithm, including configuration parameters, usage examples, and best practices, is provided in separate dedicated files to maintain clarity and focus in this main README.
 
 ## 📦 Installation
 
