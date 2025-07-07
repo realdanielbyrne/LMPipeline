@@ -14,6 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .algorithms.base import BaseStage, StageConfig, StageResult
 from .algorithms.sft import SFTStage
+from .algorithms.trl_sft import TRLSFTStage
 from .algorithms.dpo import DPOStage
 from .algorithms.rlaif import RLAIFStage
 from .algorithms.rl import RLStage
@@ -171,6 +172,7 @@ class Pipeline:
     def _register_default_stages(self) -> None:
         """Register all default stages."""
         self.register_stage("sft", SFTStage)
+        self.register_stage("trl_sft", TRLSFTStage)
         self.register_stage("dpo", DPOStage)
         self.register_stage("rlaif", RLAIFStage)
         self.register_stage("rl", RLStage)

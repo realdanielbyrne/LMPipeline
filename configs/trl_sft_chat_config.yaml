@@ -1,0 +1,73 @@
+# TRL SFT Pipeline Configuration for Chat-Formatted Datasets
+# This configuration demonstrates TRL SFT with chat template handling
+
+# Model configuration
+model_name_or_path: "microsoft/DialoGPT-medium"
+use_auth_token: false
+trust_remote_code: false
+torch_dtype: "float16"
+
+# Pipeline configuration
+output_dir: "./outputs/trl_sft_chat"
+stages:
+  - "trl_sft"
+
+# Logging and monitoring
+log_level: "INFO"
+use_wandb: false
+
+# Stage-specific configurations
+stage_configs:
+  trl_sft:
+    # Dataset configuration - using chat-formatted data
+    dataset_name_or_path: "examples/chat_sample_data.jsonl"
+    dataset_config_name: null
+    max_seq_length: 1024
+    validation_split: 0.2
+    auto_detect_format: true  # Will detect 'messages' format automatically
+    
+    # Quantization configuration
+    use_4bit: true
+    use_8bit: false
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_use_double_quant: true
+    
+    # LoRA configuration
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    lora_target_modules: null  # Auto-detect
+    lora_bias: "none"
+    
+    # Training configuration
+    num_train_epochs: 2
+    per_device_train_batch_size: 2
+    per_device_eval_batch_size: 2
+    gradient_accumulation_steps: 2
+    learning_rate: 5e-5
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    lr_scheduler_type: "linear"
+    logging_steps: 5
+    save_steps: 50
+    eval_steps: 50
+    save_total_limit: 2
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_loss"
+    greater_is_better: false
+    
+    # TRL-specific configuration for chat datasets
+    packing: false                   # Disable packing for chat format
+    packing_strategy: "ffd"          
+    completion_only_loss: null       # Let TRL auto-detect
+    assistant_only_loss: true        # Only compute loss on assistant responses
+    neftune_noise_alpha: null        # Disable NEFTune for chat training
+    use_liger_kernel: false          
+    dataset_text_field: "messages"   # Use messages field
+    chat_template_path: null         # Let model's tokenizer handle chat template
+    eos_token: null                  # Use model's default
+    pad_token: null                  # Use model's default
+    
+    # Additional options
+    resume_from_checkpoint: null

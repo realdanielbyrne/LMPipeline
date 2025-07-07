@@ -1,0 +1,80 @@
+# TRL SFT Pipeline Configuration
+# This configuration demonstrates the new TRL-based SFT implementation
+
+# Model configuration
+model_name_or_path: "microsoft/DialoGPT-medium"
+use_auth_token: false
+trust_remote_code: false
+torch_dtype: "float16"
+
+# Pipeline configuration
+output_dir: "./outputs/trl_sft"
+stages:
+  - "trl_sft"
+
+# Logging and monitoring
+log_level: "INFO"
+use_wandb: false
+wandb_project: "lmpipeline-trl-sft"
+
+# Post-processing options
+upload_to_hub: false
+convert_to_gguf: false
+
+# Stage-specific configurations
+stage_configs:
+  trl_sft:
+    # Dataset configuration
+    dataset_name_or_path: "examples/sample_data.jsonl"
+    dataset_config_name: null
+    max_seq_length: 2048
+    instruction_template: "### Instruction:\n{instruction}\n\n### Response:\n{response}"
+    validation_split: 0.1
+    auto_detect_format: true
+    
+    # Quantization configuration
+    use_4bit: true
+    use_8bit: false
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_use_double_quant: true
+    
+    # LoRA configuration
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    lora_target_modules: null  # Auto-detect
+    lora_bias: "none"
+    
+    # Training configuration
+    num_train_epochs: 3
+    per_device_train_batch_size: 4
+    per_device_eval_batch_size: 4
+    gradient_accumulation_steps: 1
+    learning_rate: 5e-5
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    warmup_steps: 0
+    lr_scheduler_type: "linear"
+    logging_steps: 10
+    save_steps: 500
+    eval_steps: 500
+    save_total_limit: 3
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_loss"
+    greater_is_better: false
+    
+    # TRL-specific configuration options
+    packing: true                    # Enable sequence packing for efficiency
+    packing_strategy: "ffd"          # First-fit decreasing packing strategy
+    completion_only_loss: null       # Auto-detect based on dataset format
+    assistant_only_loss: false       # Compute loss only on assistant responses
+    neftune_noise_alpha: 5.0         # NEFTune noise for performance enhancement
+    use_liger_kernel: false          # Liger kernel for memory optimization
+    dataset_text_field: "text"       # Text field name for datasets
+    chat_template_path: null         # Custom chat template path
+    eos_token: null                  # End-of-sequence token
+    pad_token: null                  # Padding token
+    
+    # Additional options
+    resume_from_checkpoint: null
